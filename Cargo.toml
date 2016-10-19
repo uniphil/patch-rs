@@ -6,6 +6,7 @@ description = "Parse patches in the unified diff format"
 repository = "https://github.com/uniphil/patch-rs"
 readme = "readme.md"
 keywords = ["patch", "diff", "parse", "nom"]
+license = "MIT"
 
 [dependencies]
 nom = "^1.2.4"
