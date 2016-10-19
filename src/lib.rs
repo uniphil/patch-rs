@@ -1,13 +1,65 @@
+//! patch-rs is a parser library for [Unified Format]
+//! (https://www.gnu.org/software/diffutils/manual/html_node/Unified-Format.html#Unified-Format)
+//! diffs.
+//!
+//! GVR also honed down the spec a bit more:
+//! http://www.artima.com/weblogs/viewpost.jsp?thread=164293
+
 #[macro_use]
 extern crate nom;
 
+use std::error::Error;
 use nom::*;
 
-// unified diff format:
-// https://www.gnu.org/software/diffutils/manual/html_node/Detailed-Unified.html
-// http://www.artima.com/weblogs/viewpost.jsp?thread=164293
+#[derive(Debug, Eq, PartialEq)]
+pub struct Patch {
+    pub old: String,
+    pub new: String,
+}
 
-named!(nonEscape<char>,
+#[derive(Debug)]
+pub enum PatchError {
+    ParseError,
+}
+
+impl std::fmt::Display for PatchError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match *self {
+            PatchError::ParseError =>
+                write!(f, "Error while parsing"),
+        }
+    }
+}
+
+impl Error for PatchError {
+    fn description(&self) -> &str {
+        match *self {
+            PatchError::ParseError =>
+                "parse error",
+        }
+    }
+}
+
+pub fn parse(diff: &str) -> Result<Patch, PatchError> {
+    match patch(diff.as_bytes()) {
+        IResult::Done(_, (old, new)) =>
+            Ok(Patch { old: old, new: new }),
+        IResult::Incomplete(x) => {
+            println!("incomplete {:?}", x);
+            Err(PatchError::ParseError)
+        },
+        IResult::Error(x) => {
+            if let Err::Position(_, chrs) = x {
+                println!("chrs {:?}", std::str::from_utf8(chrs));
+            }
+            // println!("{:?}", x);
+            Err(PatchError::ParseError)
+        },
+    }
+}
+
+
+named!(non_escape<char>,
     none_of!("\\\"\0\n\r\t")
 );
 
@@ -21,7 +73,7 @@ named!(escape<char>,
 
 named!(unescape<String>,
     map!(
-        many1!( alt!( nonEscape | escape ) ),
+        many1!( alt!( non_escape | escape ) ),
         |chars: Vec<char>| chars.into_iter().collect::<String>()
     )
 );
@@ -51,7 +103,7 @@ fn test_quoted() {
 named!(bare<String>,
     map_res!(
         map_res!(
-            take_until!(" "),
+            is_not!(" \n"),
             std::str::from_utf8
         ),
         std::str::FromStr::from_str
@@ -62,6 +114,9 @@ named!(bare<String>,
 fn test_bare() {
     assert_eq!(bare("file-name ".as_bytes()),
         IResult::Done(" ".as_bytes(), "file-name".to_string()));
+
+    assert_eq!(bare("file-name\n".as_bytes()),
+        IResult::Done("\n".as_bytes(), "file-name".to_string()));
 }
 
 named!(fname<String>, alt!(quoted | bare));
@@ -82,15 +137,7 @@ fn test_fname() {
 named!(header_line_content<String>,
     chain!(
         filename: fname ~
-        opt!(
-            chain!(
-                multispace ~  // gnu says space, guido says tab
-                take_until!(" ") ~ space ~  // date
-                take_until!(" ") ~ space ~ // time
-                is_a!("+-") ~ digit ,  // timezone
-                || 0
-            )
-        ) ,
+        take_until!("\n") ,
 
         || filename
     )
@@ -98,8 +145,8 @@ named!(header_line_content<String>,
 
 #[test]
 fn test_header_line_contents() {
-    assert_eq!(header_line_content("lao 2002-02-21 23:30:39.942229878 -0800".as_bytes()),
-        IResult::Done("".as_bytes(), "lao".to_string()));
+    assert_eq!(header_line_content("lao 2002-02-21 23:30:39.942229878 -0800\n".as_bytes()),
+        IResult::Done("\n".as_bytes(), "lao".to_string()));
 }
 
 named!(headers<(String, String)>,
@@ -123,6 +170,12 @@ fn test_headers() {
 --- lao 2002-02-21 23:30:39.942229878 -0800
 +++ tzu 2002-02-21 23:30:50.442260588 -0800\n".as_bytes();
     assert_eq!(headers(sample),
+        IResult::Done("".as_bytes(), ("lao".to_string(), "tzu".to_string())));
+
+    let sample2 = "\
+--- lao
++++ tzu\n".as_bytes();
+    assert_eq!(headers(sample2),
         IResult::Done("".as_bytes(), ("lao".to_string(), "tzu".to_string())));
 }
 
@@ -222,8 +275,8 @@ fn test_patch() {
    they have different names.
 +They both may be called deep and profound.
 +Deeper and more profound,
-+The door of all subtleties!\n".as_bytes();
++The door of all subtleties!\n";
 
-    assert_eq!(patch(sample),
+    assert_eq!(patch(sample.as_bytes()),
         IResult::Done("".as_bytes(), ("lao".to_string(), "tzu".to_string())));
 }
