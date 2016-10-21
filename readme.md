@@ -2,6 +2,9 @@
 
 Parse unified diffs with rust
 
+[![Build Status](https://travis-ci.org/uniphil/patch-rs.svg?branch=master)](https://travis-ci.org/uniphil/patch-rs)
+[![Crates.io Badge](https://img.shields.io/crates/v/patch.svg)](https://crates.io/crates/patch)
+
 ```rust
 let sample = "\
 --- before.py
