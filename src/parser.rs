@@ -7,6 +7,7 @@ pub struct Patch<'a> {
     pub old: String,
     pub new: String,
     pub hunks: Vec<Hunk<'a>>,
+    pub no_newline: bool,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -177,14 +178,29 @@ named!(chunks<Vec<Hunk> >, many0!(chunk));
 
 
 /*
+ * Trailing newline indicator
+ */
+
+named!(no_newline<bool>,
+    map!(
+        // complete!(take!(1)),
+        // |e: Result<_, _>| e.is_ok()
+        opt!(complete!(tag!("\\ No newline at end of file"))),
+        |matched: Option<&[u8]>| matched.is_none()
+    )
+);
+
+
+/*
  * The real deal
  */
 
-named!(pub patch<((String, String), Vec<Hunk>)>,
+named!(pub patch<((String, String), Vec<Hunk>, bool)>,
     chain!(
         filenames: headers ~
-        hunks: chunks ,
-        || (filenames, hunks)
+        hunks: chunks ~
+        no_newline: no_newline ,
+        || (filenames, hunks, no_newline)
     )
 );
 
@@ -325,6 +341,7 @@ fn test_patch() {
                 Line::Add("The door of all subtleties!"),
             ] },
         ],
+        true,
     );
 
     assert_eq!(patch(sample.as_bytes()),

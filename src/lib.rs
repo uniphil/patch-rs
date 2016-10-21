@@ -42,8 +42,13 @@ impl Error for PatchError {
 
 pub fn parse(diff: &str) -> Result<Patch, PatchError> {
     match patch(diff.as_bytes()) {
-        IResult::Done(_, ((old, new), hunks)) =>
-            Ok(Patch { old: old, new: new, hunks: hunks }),
+        IResult::Done(_, ((old, new), hunks, no_newline)) =>
+            Ok(Patch {
+                old: old,
+                new: new,
+                hunks: hunks,
+                no_newline: no_newline,
+            }),
         IResult::Incomplete(x) => {
             println!("incomplete {:?}", x);
             Err(PatchError::ParseError)
