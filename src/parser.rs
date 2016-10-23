@@ -252,12 +252,20 @@ named!(no_newline<bool>,
  * The real deal
  */
 
-named!(pub patch<((File, File), Vec<Hunk>, bool)>,
+named!(pub patch<Patch>,
     chain!(
         files: headers ~
         hunks: chunks ~
         no_newline: no_newline ,
-        || (files, hunks, no_newline)
+        move || {
+            let (old, new) = files;
+            Patch {
+                old: old,
+                new: new,
+                hunks: hunks,
+                no_newline: no_newline,
+            }
+        }
     )
 );
 
@@ -436,15 +444,16 @@ fn test_patch() {
 +Deeper and more profound,
 +The door of all subtleties!\n";
 
-    let expected = (
-        (File {
+    let expected = Patch {
+        old: File {
             name: "lao".to_string(),
             meta: Some(FileMetadata::DateTime(DateTime::parse_from_rfc3339("2002-02-21T23:30:39.942229878-08:00").unwrap())),
-        }, File {
+        },
+        new: File {
             name: "tzu".to_string(),
-            meta: Some(FileMetadata::DateTime(DateTime::parse_from_rfc3339("2002-02-21T23:30:50.442260588-08:00").unwrap())),
-        }),
-        vec![
+            meta: Some(FileMetadata::DateTime(DateTime::parse_from_rfc3339("2002-02-21T23:30:50.442260588-08:00").unwrap()))
+        },
+        hunks: vec![
             Hunk {
                 old_range: Range { start: 1, count: 7 },
                 new_range: Range { start: 1, count: 6 },
@@ -473,8 +482,8 @@ fn test_patch() {
                 ]
             },
         ],
-        true,
-    );
+        no_newline: true,
+    };
 
     assert_eq!(patch(sample.as_bytes()),
         IResult::Done("".as_bytes(), expected));
