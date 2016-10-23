@@ -99,9 +99,10 @@ named!(header_line_content<File>,
             meta: {
                 if after.is_empty() {
                     None
+                } else if let Ok(dt) = DateTime::parse_from_str(after, "%F %T%.f %z").or_else(|_| DateTime::parse_from_str(after, "%F %T %z")) {
+                    Some(FileMetadata::DateTime(dt))
                 } else {
-                    Some(DateTime::parse_from_str(after, "%F %T%.f %z").or_else(|_| DateTime::parse_from_str(after, "%F %T %z")).map(FileMetadata::DateTime).ok()
-                        .unwrap_or_else(|| FileMetadata::Other(after)))
+                    Some(FileMetadata::Other(after))
                 }
             },
         }
