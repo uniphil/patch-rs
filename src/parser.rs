@@ -84,7 +84,7 @@ named!(header_line_content<(String, Option<DateTime<FixedOffset>>)>,
             std::str::from_utf8
         ) ,
 
-        || (filename, DateTime::parse_from_str(after, "%F %T%.f %z").ok())
+        || (filename, DateTime::parse_from_str(after, "%F %T%.f %z").or_else(|_| DateTime::parse_from_str(after, "%F %T %z")).ok())
     )
 );
 
@@ -249,6 +249,9 @@ fn test_fname() {
 fn test_header_line_contents() {
     assert_eq!(header_line_content("lao 2002-02-21 23:30:39.942229878 -0800\n".as_bytes()),
         IResult::Done("\n".as_bytes(), ("lao".to_string(), DateTime::parse_from_rfc3339("2002-02-21T23:30:39.942229878-08:00").ok())));
+
+    assert_eq!(header_line_content("lao 2002-02-21 23:30:39 -0800\n".as_bytes()),
+        IResult::Done("\n".as_bytes(), ("lao".to_string(), DateTime::parse_from_rfc3339("2002-02-21T23:30:39-08:00").ok())));
 
     assert_eq!(header_line_content("lao\n".as_bytes()),
         IResult::Done("\n".as_bytes(), ("lao".to_string(), None)));
