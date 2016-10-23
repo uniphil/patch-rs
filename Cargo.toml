@@ -10,3 +10,4 @@ license = "MIT"
 
 [dependencies]
 nom = "^1.2.4"
+chrono = "^0.2.25"

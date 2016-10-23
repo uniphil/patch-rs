@@ -1,11 +1,14 @@
 use std;
 use nom::*;
+use chrono::{FixedOffset, DateTime};
 
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct Patch<'a> {
     pub old: String,
     pub new: String,
+    pub old_timestamp: Option<DateTime<FixedOffset>>,
+    pub new_timestamp: Option<DateTime<FixedOffset>>,
     pub hunks: Vec<Hunk<'a>>,
     pub no_newline: bool,
 }
@@ -72,16 +75,20 @@ named!(fname<String>, alt!(quoted | bare));
  * Header lines
  */
 
-named!(header_line_content<String>,
+named!(header_line_content<(String, Option<DateTime<FixedOffset>>)>,
     chain!(
         filename: fname ~
-        take_until!("\n") ,
+        opt!(space) ~
+        after: map_res!(
+            take_until!("\n"),
+            std::str::from_utf8
+        ) ,
 
-        || filename
+        || (filename, DateTime::parse_from_str(after, "%F %T%.f %z").ok())
     )
 );
 
-named!(headers<(String, String)>,
+named!(headers<((String, Option<DateTime<FixedOffset>>), (String, Option<DateTime<FixedOffset>>))>,
     chain!(
             tag!("---") ~
             space ~
@@ -195,12 +202,12 @@ named!(no_newline<bool>,
  * The real deal
  */
 
-named!(pub patch<((String, String), Vec<Hunk>, bool)>,
+named!(pub patch<(((String, Option<DateTime<FixedOffset>>), (String, Option<DateTime<FixedOffset>>)), Vec<Hunk>, bool)>,
     chain!(
-        filenames: headers ~
+        files: headers ~
         hunks: chunks ~
         no_newline: no_newline ,
-        || (filenames, hunks, no_newline)
+        || (files, hunks, no_newline)
     )
 );
 
@@ -241,7 +248,10 @@ fn test_fname() {
 #[test]
 fn test_header_line_contents() {
     assert_eq!(header_line_content("lao 2002-02-21 23:30:39.942229878 -0800\n".as_bytes()),
-        IResult::Done("\n".as_bytes(), "lao".to_string()));
+        IResult::Done("\n".as_bytes(), ("lao".to_string(), DateTime::parse_from_rfc3339("2002-02-21T23:30:39.942229878-08:00").ok())));
+
+    assert_eq!(header_line_content("lao\n".as_bytes()),
+        IResult::Done("\n".as_bytes(), ("lao".to_string(), None)));
 }
 
 #[test]
@@ -250,13 +260,15 @@ fn test_headers() {
 --- lao 2002-02-21 23:30:39.942229878 -0800
 +++ tzu 2002-02-21 23:30:50.442260588 -0800\n".as_bytes();
     assert_eq!(headers(sample),
-        IResult::Done("".as_bytes(), ("lao".to_string(), "tzu".to_string())));
+        IResult::Done("".as_bytes(), (("lao".to_string(), DateTime::parse_from_rfc3339("2002-02-21T23:30:39.942229878-08:00").ok()),
+                                      ("tzu".to_string(), DateTime::parse_from_rfc3339("2002-02-21T23:30:50.442260588-08:00").ok()))));
 
     let sample2 = "\
 --- lao
 +++ tzu\n".as_bytes();
     assert_eq!(headers(sample2),
-        IResult::Done("".as_bytes(), ("lao".to_string(), "tzu".to_string())));
+        IResult::Done("".as_bytes(), (("lao".to_string(), None),
+                                      ("tzu".to_string(), None))));
 }
 
 #[test]
@@ -319,7 +331,8 @@ fn test_patch() {
 +The door of all subtleties!\n";
 
     let expected = (
-        ("lao".to_string(), "tzu".to_string()),
+        (("lao".to_string(), DateTime::parse_from_rfc3339("2002-02-21T23:30:39.942229878-08:00").ok()),
+         ("tzu".to_string(), DateTime::parse_from_rfc3339("2002-02-21T23:30:50.442260588-08:00").ok())),
         vec![
             Hunk { lines: vec! [
                 Line::Remove("The Way that can be told of is not the eternal Way;"),
