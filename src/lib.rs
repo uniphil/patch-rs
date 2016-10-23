@@ -7,11 +7,12 @@
 
 #[macro_use]
 extern crate nom;
+extern crate chrono;
 
 use std::error::Error;
 use nom::{IResult, Err};
 
-pub use self::parser::{Patch};
+pub use self::parser::{Patch, File, FileMetadata};
 use self::parser::{patch};
 
 mod parser;
