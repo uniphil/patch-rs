@@ -5,12 +5,22 @@ use chrono::{FixedOffset, DateTime};
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct Patch<'a> {
-    pub old: String,
-    pub new: String,
-    pub old_timestamp: Option<DateTime<FixedOffset>>,
-    pub new_timestamp: Option<DateTime<FixedOffset>>,
+    pub old: File<'a>,
+    pub new: File<'a>,
     pub hunks: Vec<Hunk<'a>>,
     pub no_newline: bool,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct File<'a> {
+    pub name: String,
+    pub meta: Option<FileMetadata<'a>>,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum FileMetadata<'a> {
+    DateTime(DateTime<FixedOffset>),
+    Other(&'a str),
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -75,7 +85,7 @@ named!(fname<String>, alt!(quoted | bare));
  * Header lines
  */
 
-named!(header_line_content<(String, Option<DateTime<FixedOffset>>)>,
+named!(header_line_content<File>,
     chain!(
         filename: fname ~
         opt!(space) ~
@@ -84,11 +94,21 @@ named!(header_line_content<(String, Option<DateTime<FixedOffset>>)>,
             std::str::from_utf8
         ) ,
 
-        || (filename, DateTime::parse_from_str(after, "%F %T%.f %z").or_else(|_| DateTime::parse_from_str(after, "%F %T %z")).ok())
+        || File {
+            name: filename,
+            meta: {
+                if after.is_empty() {
+                    None
+                } else {
+                    Some(DateTime::parse_from_str(after, "%F %T%.f %z").or_else(|_| DateTime::parse_from_str(after, "%F %T %z")).map(FileMetadata::DateTime).ok()
+                        .unwrap_or_else(|| FileMetadata::Other(after)))
+                }
+            },
+        }
     )
 );
 
-named!(headers<((String, Option<DateTime<FixedOffset>>), (String, Option<DateTime<FixedOffset>>))>,
+named!(headers<(File, File)>,
     chain!(
             tag!("---") ~
             space ~
@@ -202,7 +222,7 @@ named!(no_newline<bool>,
  * The real deal
  */
 
-named!(pub patch<(((String, Option<DateTime<FixedOffset>>), (String, Option<DateTime<FixedOffset>>)), Vec<Hunk>, bool)>,
+named!(pub patch<((File, File), Vec<Hunk>, bool)>,
     chain!(
         files: headers ~
         hunks: chunks ~
@@ -247,14 +267,23 @@ fn test_fname() {
 
 #[test]
 fn test_header_line_contents() {
+    assert_eq!(header_line_content("lao\n".as_bytes()),
+        IResult::Done("\n".as_bytes(), File { name: "lao".to_string(), meta: None }));
+
     assert_eq!(header_line_content("lao 2002-02-21 23:30:39.942229878 -0800\n".as_bytes()),
-        IResult::Done("\n".as_bytes(), ("lao".to_string(), DateTime::parse_from_rfc3339("2002-02-21T23:30:39.942229878-08:00").ok())));
+        IResult::Done("\n".as_bytes(), File {
+            name: "lao".to_string(),
+            meta: Some(FileMetadata::DateTime(DateTime::parse_from_rfc3339("2002-02-21T23:30:39.942229878-08:00").unwrap())),
+        }));
 
     assert_eq!(header_line_content("lao 2002-02-21 23:30:39 -0800\n".as_bytes()),
-        IResult::Done("\n".as_bytes(), ("lao".to_string(), DateTime::parse_from_rfc3339("2002-02-21T23:30:39-08:00").ok())));
+        IResult::Done("\n".as_bytes(), File {
+            name: "lao".to_string(),
+            meta: Some(FileMetadata::DateTime(DateTime::parse_from_rfc3339("2002-02-21T23:30:39-08:00").unwrap())),
+        }));
 
-    assert_eq!(header_line_content("lao\n".as_bytes()),
-        IResult::Done("\n".as_bytes(), ("lao".to_string(), None)));
+    assert_eq!(header_line_content("lao 08f78e0addd5bf7b7aa8887e406493e75e8d2b55\n".as_bytes()),
+        IResult::Done("\n".as_bytes(), File { name: "lao".to_string(), meta: Some(FileMetadata::Other("08f78e0addd5bf7b7aa8887e406493e75e8d2b55")) }));
 }
 
 #[test]
@@ -263,15 +292,43 @@ fn test_headers() {
 --- lao 2002-02-21 23:30:39.942229878 -0800
 +++ tzu 2002-02-21 23:30:50.442260588 -0800\n".as_bytes();
     assert_eq!(headers(sample),
-        IResult::Done("".as_bytes(), (("lao".to_string(), DateTime::parse_from_rfc3339("2002-02-21T23:30:39.942229878-08:00").ok()),
-                                      ("tzu".to_string(), DateTime::parse_from_rfc3339("2002-02-21T23:30:50.442260588-08:00").ok()))));
+        IResult::Done("".as_bytes(), (
+            File {
+                name: "lao".to_string(),
+                meta: Some(FileMetadata::DateTime(DateTime::parse_from_rfc3339("2002-02-21T23:30:39.942229878-08:00").unwrap())),
+            },
+            File {
+                name: "tzu".to_string(),
+                meta: Some(FileMetadata::DateTime(DateTime::parse_from_rfc3339("2002-02-21T23:30:50.442260588-08:00").unwrap())),
+            })));
 
     let sample2 = "\
 --- lao
 +++ tzu\n".as_bytes();
     assert_eq!(headers(sample2),
-        IResult::Done("".as_bytes(), (("lao".to_string(), None),
-                                      ("tzu".to_string(), None))));
+        IResult::Done("".as_bytes(), (
+            File {
+                name: "lao".to_string(),
+                meta: None,
+            },
+            File {
+                name: "tzu".to_string(),
+                meta: None,
+            })));
+
+    let sample3 = "\
+--- lao 08f78e0addd5bf7b7aa8887e406493e75e8d2b55
++++ tzu e044048282ce75186ecc7a214fd3d9ba478a2816\n".as_bytes();
+    assert_eq!(headers(sample3),
+        IResult::Done("".as_bytes(), (
+            File {
+                name: "lao".to_string(),
+                meta: Some(FileMetadata::Other("08f78e0addd5bf7b7aa8887e406493e75e8d2b55")),
+            },
+            File {
+                name: "tzu".to_string(),
+                meta: Some(FileMetadata::Other("e044048282ce75186ecc7a214fd3d9ba478a2816")),
+            })));
 }
 
 #[test]
@@ -334,8 +391,13 @@ fn test_patch() {
 +The door of all subtleties!\n";
 
     let expected = (
-        (("lao".to_string(), DateTime::parse_from_rfc3339("2002-02-21T23:30:39.942229878-08:00").ok()),
-         ("tzu".to_string(), DateTime::parse_from_rfc3339("2002-02-21T23:30:50.442260588-08:00").ok())),
+        (File {
+            name: "lao".to_string(),
+            meta: Some(FileMetadata::DateTime(DateTime::parse_from_rfc3339("2002-02-21T23:30:39.942229878-08:00").unwrap())),
+        }, File {
+            name: "tzu".to_string(),
+            meta: Some(FileMetadata::DateTime(DateTime::parse_from_rfc3339("2002-02-21T23:30:50.442260588-08:00").unwrap())),
+        }),
         vec![
             Hunk { lines: vec! [
                 Line::Remove("The Way that can be told of is not the eternal Way;"),

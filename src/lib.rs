@@ -12,7 +12,7 @@ extern crate chrono;
 use std::error::Error;
 use nom::{IResult, Err};
 
-pub use self::parser::{Patch};
+pub use self::parser::{Patch, File, FileMetadata};
 use self::parser::{patch};
 
 mod parser;
@@ -43,12 +43,10 @@ impl Error for PatchError {
 
 pub fn parse(diff: &str) -> Result<Patch, PatchError> {
     match patch(diff.as_bytes()) {
-        IResult::Done(_, (((old, old_timestamp), (new, new_timestamp)), hunks, no_newline)) =>
+        IResult::Done(_, ((old, new), hunks, no_newline)) =>
             Ok(Patch {
                 old: old,
                 new: new,
-                old_timestamp: old_timestamp,
-                new_timestamp: new_timestamp,
                 hunks: hunks,
                 no_newline: no_newline,
             }),
