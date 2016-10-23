@@ -240,8 +240,6 @@ named!(chunks<Vec<Hunk> >, many1!(chunk));
 
 named!(no_newline<bool>,
     map!(
-        // complete!(take!(1)),
-        // |e: Result<_, _>| e.is_ok()
         opt!(complete!(tag!("\\ No newline at end of file"))),
         |matched: Option<&[u8]>| matched.is_none()
     )

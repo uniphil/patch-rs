@@ -10,7 +10,7 @@ extern crate nom;
 extern crate chrono;
 
 use std::error::Error;
-use nom::{IResult, Err};
+use nom::{IResult};
 
 pub use self::parser::{Patch, File, FileMetadata};
 use self::parser::{patch};
@@ -45,16 +45,9 @@ pub fn parse(diff: &str) -> Result<Patch, PatchError> {
     match patch(diff.as_bytes()) {
         IResult::Done(_, p) =>
             Ok(p),
-        IResult::Incomplete(x) => {
-            println!("incomplete {:?}", x);
-            Err(PatchError::ParseError)
-        },
-        IResult::Error(x) => {
-            if let Err::Position(_, chrs) = x {
-                println!("chrs {:?}", std::str::from_utf8(chrs));
-            }
-            // println!("{:?}", x);
-            Err(PatchError::ParseError)
-        },
+        IResult::Incomplete(_) =>
+            Err(PatchError::ParseError),
+        IResult::Error(_) =>
+            Err(PatchError::ParseError),
     }
 }
