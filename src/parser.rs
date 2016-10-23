@@ -24,7 +24,15 @@ pub enum FileMetadata<'a> {
 }
 
 #[derive(Debug, Eq, PartialEq)]
+pub struct Range {
+    start: u64,
+    count: u64,
+}
+
+#[derive(Debug, Eq, PartialEq)]
 pub struct Hunk<'a> {
+    pub old_range: Range,
+    pub new_range: Range,
     pub lines: Vec<Line<'a>>,
 }
 
@@ -128,27 +136,40 @@ named!(headers<(File, File)>,
  * Chunk intro
  */
 
-named!(range<u8>,
-    chain!(
-        digit ~
-        opt!(chain!(
-            tag!(",") ~
-            digit ,
-            || 0
-        )) ,
-        || 0
+named!(u64_digit<u64>,
+    map_res!(
+        map_res!(
+            digit,
+            std::str::from_utf8
+        ),
+        std::str::FromStr::from_str
     )
 );
 
-named!(chunk_intro<u8>,
+named!(range<Range>,
+    chain!(
+        start: u64_digit ~
+        count: opt!(complete!(chain!(
+            tag!(",") ~
+            n: u64_digit ,
+            || n
+        ))) ,
+        || Range {
+            start: start,
+            count: count.unwrap_or(1)
+        }
+    )
+);
+
+named!(chunk_intro<(Range, Range)>,
     chain!(
         tag!("@@ -") ~
-        range ~
+        old_range: range ~
         tag!(" +") ~
-        range ~
+        new_range: range ~
         tag!(" @@") ~
         newline ,
-        || 0
+        || (old_range, new_range)
     )
 );
 
@@ -196,13 +217,21 @@ named!(chunk_line<Line>,
 
 named!(chunk<Hunk>,
     chain!(
-        chunk_intro ~
+        ranges: chunk_intro ~
         lines: many1!(chunk_line) ,
-        || Hunk { lines: lines }
+        move || {
+            let (old_range, new_range) = ranges;
+            Hunk {
+                old_range: old_range,
+                new_range: new_range,
+                lines: lines
+            }
+        }
     )
 );
 
-named!(chunks<Vec<Hunk> >, many0!(chunk));
+// "Next come one or more hunks of differences"
+named!(chunks<Vec<Hunk> >, many1!(chunk));
 
 
 /*
@@ -333,10 +362,22 @@ fn test_headers() {
 }
 
 #[test]
+fn test_range() {
+    assert_eq!(range("1,7".as_bytes()),
+        IResult::Done("".as_bytes(), Range { start: 1, count: 7 }));
+
+    assert_eq!(range("2".as_bytes()),
+        IResult::Done("".as_bytes(), Range { start: 2, count: 1 }));
+}
+
+#[test]
 fn test_chunk_intro() {
     let sample = "@@ -1,7 +1,6 @@\n".as_bytes();
     assert_eq!(chunk_intro(sample),
-        IResult::Done("".as_bytes(), 0))
+        IResult::Done("".as_bytes(), (
+            Range { start: 1, count: 7 },
+            Range { start: 1, count: 6 },
+        )))
 }
 
 #[test]
@@ -352,17 +393,21 @@ fn test_chunk() {
  Therefore let there always be non-being,
    so we may see their subtlety,
  And let there always be being,\n".as_bytes();
-    let expected = Hunk { lines: vec![
-        Line::Remove("The Way that can be told of is not the eternal Way;"),
-        Line::Remove("The name that can be named is not the eternal name."),
-        Line::Context("The Nameless is the origin of Heaven and Earth;"),
-        Line::Remove("The Named is the mother of all things."),
-        Line::Add("The named is the mother of all things."),
-        Line::Add(""),
-        Line::Context("Therefore let there always be non-being,"),
-        Line::Context("  so we may see their subtlety,"),
-        Line::Context("And let there always be being,"),
-    ] };
+    let expected = Hunk {
+        old_range: Range { start: 1, count: 7 },
+        new_range: Range { start: 1, count: 6 },
+        lines: vec![
+            Line::Remove("The Way that can be told of is not the eternal Way;"),
+            Line::Remove("The name that can be named is not the eternal name."),
+            Line::Context("The Nameless is the origin of Heaven and Earth;"),
+            Line::Remove("The Named is the mother of all things."),
+            Line::Add("The named is the mother of all things."),
+            Line::Add(""),
+            Line::Context("Therefore let there always be non-being,"),
+            Line::Context("  so we may see their subtlety,"),
+            Line::Context("And let there always be being,"),
+        ],
+    };
     assert_eq!(chunk(sample),
         IResult::Done("".as_bytes(), expected))
 }
@@ -400,25 +445,33 @@ fn test_patch() {
             meta: Some(FileMetadata::DateTime(DateTime::parse_from_rfc3339("2002-02-21T23:30:50.442260588-08:00").unwrap())),
         }),
         vec![
-            Hunk { lines: vec! [
-                Line::Remove("The Way that can be told of is not the eternal Way;"),
-                Line::Remove("The name that can be named is not the eternal name."),
-                Line::Context("The Nameless is the origin of Heaven and Earth;"),
-                Line::Remove("The Named is the mother of all things."),
-                Line::Add("The named is the mother of all things."),
-                Line::Add(""),
-                Line::Context("Therefore let there always be non-being,"),
-                Line::Context("  so we may see their subtlety,"),
-                Line::Context("And let there always be being,"),
-            ] },
-            Hunk { lines: vec! [
-                Line::Context("The two are the same,"),
-                Line::Context("But after they are produced,"),
-                Line::Context("  they have different names."),
-                Line::Add("They both may be called deep and profound."),
-                Line::Add("Deeper and more profound,"),
-                Line::Add("The door of all subtleties!"),
-            ] },
+            Hunk {
+                old_range: Range { start: 1, count: 7 },
+                new_range: Range { start: 1, count: 6 },
+                lines: vec! [
+                    Line::Remove("The Way that can be told of is not the eternal Way;"),
+                    Line::Remove("The name that can be named is not the eternal name."),
+                    Line::Context("The Nameless is the origin of Heaven and Earth;"),
+                    Line::Remove("The Named is the mother of all things."),
+                    Line::Add("The named is the mother of all things."),
+                    Line::Add(""),
+                    Line::Context("Therefore let there always be non-being,"),
+                    Line::Context("  so we may see their subtlety,"),
+                    Line::Context("And let there always be being,"),
+                ]
+            },
+            Hunk {
+                old_range: Range { start: 9, count: 3 },
+                new_range: Range { start: 8, count: 6 },
+                lines: vec! [
+                    Line::Context("The two are the same,"),
+                    Line::Context("But after they are produced,"),
+                    Line::Context("  they have different names."),
+                    Line::Add("They both may be called deep and profound."),
+                    Line::Add("Deeper and more profound,"),
+                    Line::Add("The door of all subtleties!"),
+                ]
+            },
         ],
         true,
     );
