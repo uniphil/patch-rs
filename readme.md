@@ -6,6 +6,9 @@ Parse unified diffs with rust
 [![Crates.io Badge](https://img.shields.io/crates/v/patch.svg)](https://crates.io/crates/patch)
 
 ```rust
+extern crate patch;
+use patch::{parse};
+
 let sample = "\
 --- before.py
 +++ after.py
@@ -18,9 +21,9 @@ let sample = "\
 +hamster
  guido\n";
 
-if let Ok(patch) = patch::parse(sample) {
-    assert_eq!(&patch.old, "before.py");
-    assert_eq!(&patch.new, "after.py");
+if let Ok(patch) = parse(sample) {
+    assert_eq!(&patch.old.name, "before.py");
+    assert_eq!(&patch.new.name, "after.py");
 } else {
     panic!("failed to parse sample patch");
 }
