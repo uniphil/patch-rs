@@ -1,6 +1,6 @@
 [package]
 name = "patch"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["phil <uniphil@gmail.com>"]
 description = "Parse patches in the unified diff format"
 repository = "https://github.com/uniphil/patch-rs"
