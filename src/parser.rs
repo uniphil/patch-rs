@@ -25,8 +25,8 @@ pub enum FileMetadata<'a> {
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct Range {
-    start: u64,
-    count: u64,
+    pub start: u64,
+    pub count: u64,
 }
 
 #[derive(Debug, Eq, PartialEq)]
