@@ -68,11 +68,10 @@ named!(unescape<String>,
 );
 
 named!(quoted<String>,
-    chain!(
-        tag!("\"") ~
-        unescaped: unescape ~
-        tag!("\"") ,
-        || unescaped
+    delimited!(
+        tag!("\""),
+        unescape,
+        tag!("\"")
     )
 );
 
@@ -94,15 +93,15 @@ named!(fname<String>, alt!(quoted | bare));
  */
 
 named!(header_line_content<File>,
-    chain!(
-        filename: fname ~
-        opt!(space) ~
-        after: map_res!(
-            take_until!("\n"),
-            std::str::from_utf8
-        ) ,
+    do_parse!(
+           filename: fname
+        >> opt!(space)
+        >> after: map_res!(
+               take_until!("\n"),
+               std::str::from_utf8
+           )
 
-        || File {
+        >> (File {
             name: filename,
             meta: {
                 if after.is_empty() {
@@ -113,22 +112,22 @@ named!(header_line_content<File>,
                     Some(FileMetadata::Other(after))
                 }
             },
-        }
+        })
     )
 );
 
 named!(headers<(File, File)>,
-    chain!(
-            tag!("---") ~
-            space ~
-        oldfile: header_line_content ~
-            newline ~
-            tag!("+++") ~
-            space ~
-        newfile: header_line_content ~
-            newline ,
+    do_parse!(
+           tag!("---")
+        >> space
+        >> oldfile: header_line_content
+        >> newline
+        >> tag!("+++")
+        >> space
+        >> newfile: header_line_content
+        >> newline
 
-        || (oldfile, newfile)
+        >> (oldfile, newfile)
     )
 );
 
@@ -147,29 +146,30 @@ named!(u64_digit<u64>,
 );
 
 named!(range<Range>,
-    chain!(
-        start: u64_digit ~
-        count: opt!(complete!(chain!(
-            tag!(",") ~
-            n: u64_digit ,
-            || n
-        ))) ,
-        || Range {
+    do_parse!(
+           start: u64_digit
+        >> count: opt!(complete!(
+            preceded!(
+                tag!(","),
+                u64_digit
+            )
+        ))
+        >> (Range {
             start: start,
             count: count.unwrap_or(1)
-        }
+        })
     )
 );
 
 named!(chunk_intro<(Range, Range)>,
-    chain!(
-        tag!("@@ -") ~
-        old_range: range ~
-        tag!(" +") ~
-        new_range: range ~
-        tag!(" @@") ~
-        newline ,
-        || (old_range, new_range)
+    do_parse!(
+           tag!("@@ -")
+        >> old_range: range
+        >> tag!(" +")
+        >> new_range: range
+        >> tag!(" @@")
+        >> newline
+        >> (old_range, new_range)
     )
 );
 
@@ -181,10 +181,9 @@ named!(chunk_line<Line>,
     alt!(
         map!(
             map_res!(
-                chain!(
-                    tag!("+") ~
-                    line: take_until_and_consume!("\n") ,
-                    || line
+                preceded!(
+                    tag!("+"),
+                    take_until_and_consume!("\n")
                 ),
                 std::str::from_utf8
             ),
@@ -192,10 +191,9 @@ named!(chunk_line<Line>,
         ) |
         map!(
             map_res!(
-                chain!(
-                    tag!("-") ~
-                    line: take_until_and_consume!("\n") ,
-                    || line
+                preceded!(
+                    tag!("-"),
+                    take_until_and_consume!("\n")
                 ),
                 std::str::from_utf8
             ),
@@ -203,10 +201,9 @@ named!(chunk_line<Line>,
         ) |
         map!(
             map_res!(
-                chain!(
-                    tag!(" ") ~
-                    line: take_until_and_consume!("\n") ,
-                    || line
+                preceded!(
+                    tag!(" "),
+                    take_until_and_consume!("\n")
                 ),
                 std::str::from_utf8
             ),
@@ -216,17 +213,17 @@ named!(chunk_line<Line>,
 );
 
 named!(chunk<Hunk>,
-    chain!(
-        ranges: chunk_intro ~
-        lines: many1!(chunk_line) ,
-        move || {
+    do_parse!(
+           ranges: chunk_intro
+        >> lines: many1!(chunk_line)
+        >> ( {
             let (old_range, new_range) = ranges;
             Hunk {
                 old_range: old_range,
                 new_range: new_range,
                 lines: lines
             }
-        }
+        } )
     )
 );
 
@@ -251,11 +248,11 @@ named!(no_newline<bool>,
  */
 
 named!(pub patch<Patch>,
-    chain!(
-        files: headers ~
-        hunks: chunks ~
-        no_newline: no_newline ,
-        move || {
+    do_parse!(
+           files: headers
+        >> hunks: chunks
+        >> no_newline: no_newline
+        >> ( {
             let (old, new) = files;
             Patch {
                 old: old,
@@ -263,7 +260,7 @@ named!(pub patch<Patch>,
                 hunks: hunks,
                 no_newline: no_newline,
             }
-        }
+        })
     )
 );
 
