@@ -9,5 +9,5 @@ keywords = ["patch", "diff", "parse", "nom"]
 license = "MIT"
 
 [dependencies]
-nom = "^1.2.4"
+nom = "^2.0"
 chrono = "^0.2.25"
