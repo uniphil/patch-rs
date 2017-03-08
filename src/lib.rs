@@ -45,9 +45,7 @@ pub fn parse(diff: &str) -> Result<Patch, PatchError> {
     match patch(diff.as_bytes()) {
         IResult::Done(_, p) =>
             Ok(p),
-        IResult::Incomplete(_) =>
-            Err(PatchError::ParseError),
-        IResult::Error(_) =>
+        IResult::Incomplete(_) | IResult::Error(_) =>
             Err(PatchError::ParseError),
     }
 }
