@@ -12,7 +12,7 @@ extern crate chrono;
 use std::error::Error;
 use nom::{IResult};
 
-pub use self::parser::{Patch, File, FileMetadata, Range, Line};
+pub use self::parser::{Patch, File, FileMetadata, Range, Hunk, Line};
 use self::parser::{patch};
 
 mod parser;
