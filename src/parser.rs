@@ -97,21 +97,16 @@ named!(headers(Input) -> (File, File),
 named!(header_line_content(Input) -> File,
     do_parse!(
         filename: filename >>
-        opt!(space) >>
-        after: map!(take_until!("\n"), input_to_str) >>
+        after: opt!(preceded!(space, map!(take_until!("\n"), input_to_str))) >>
         (File {
             path: filename,
-            meta: {
-                if after.is_empty() {
-                    None
-                } else if let Ok(dt) = DateTime::parse_from_str(after, "%F %T%.f %z")
+            meta: after.and_then(|after| match after {
+                "" => None,
+                _ => Some(DateTime::parse_from_str(after, "%F %T%.f %z")
                     .or_else(|_| DateTime::parse_from_str(after, "%F %T %z"))
-                {
-                    Some(FileMetadata::DateTime(dt))
-                } else {
-                    Some(FileMetadata::Other(after))
-                }
-            },
+                    .ok()
+                    .map_or_else(|| FileMetadata::Other(after), FileMetadata::DateTime)),
+            }),
         })
     )
 );
