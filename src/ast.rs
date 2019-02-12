@@ -3,27 +3,29 @@ use chrono::{DateTime, FixedOffset};
 use crate::parser::{parse_patch, ParseError};
 
 /// A complete patch summarizing the differences between two files
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Patch<'a> {
-    /// The file information of the "-" side of the diff, line prefix: `---`
+    /// The file information of the `-` side of the diff, line prefix: `---`
     pub old: File<'a>,
-    /// The file information of the "+" side of the diff, line prefix: `+++`
+    /// The file information of the `+` side of the diff, line prefix: `+++`
     pub new: File<'a>,
     /// hunks of differences; each hunk shows one area where the files differ
     pub hunks: Vec<Hunk<'a>>,
-    /// true if the last line of a file doesn't end in a newline character
+    /// true if the last line of the file doesn't end in a newline character
     pub no_newline: bool,
 }
 
 impl<'a> Patch<'a> {
-    /// Attempt to parse a patch from the given string
+    /// Attempt to parse a patch from the given string. See the [crate root] for an example.
+    ///
+    /// [crate root]: index.html
     pub fn from_str(s: &'a str) -> Result<Self, ParseError<'a>> {
         parse_patch(s)
     }
 }
 
 /// The file path and any additional info of either the old file or the new file
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct File<'a> {
     /// The parsed path or file name of the file
     pub path: String,
@@ -32,7 +34,7 @@ pub struct File<'a> {
 }
 
 /// Additional metadata provided with the file path
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum FileMetadata<'a> {
     /// A full datetime string, e.g. `2002-02-21 23:30:39.942229878 -0800`
     DateTime(DateTime<FixedOffset>),
@@ -41,7 +43,7 @@ pub enum FileMetadata<'a> {
 }
 
 /// One area where the files differ
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Hunk<'a> {
     /// The range of lines in the old file that this hunk represents
     pub old_range: Range,
@@ -51,7 +53,7 @@ pub struct Hunk<'a> {
 }
 
 /// A range of lines in a given file
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Range {
     /// The start line of the chunk in the old or new file
     pub start: u64,
@@ -60,7 +62,7 @@ pub struct Range {
 }
 
 /// A line of the old file, new file, or both
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Line<'a> {
     /// A line added to the old file in the new file
     Add(&'a str),

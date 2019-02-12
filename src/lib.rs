@@ -38,5 +38,5 @@
 mod parser;
 mod ast;
 
-pub use ast::*;
 pub use parser::ParseError;
+pub use ast::*;

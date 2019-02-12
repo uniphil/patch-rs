@@ -12,7 +12,7 @@ use crate::ast::*;
 type Input<'a> = LocatedSpan<CompleteStr<'a>>;
 
 /// Error parsing patch format
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ParseError<'a> {
     pub line: u32,
     pub offset: usize,
