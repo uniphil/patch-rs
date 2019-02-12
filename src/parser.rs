@@ -10,6 +10,7 @@ use crate::ast::*;
 
 type Input<'a> = LocatedSpan<CompleteStr<'a>>;
 
+/// Error parsing patch format
 #[derive(Debug)]
 pub struct ParseError<'a> {
     pub line: u32,
@@ -88,7 +89,7 @@ named!(header_line_content(Input) -> File,
         opt!(space) >>
         after: map!(take_until!("\n"), input_to_str) >>
         (File {
-            name: filename,
+            path: filename,
             meta: {
                 if after.is_empty() {
                     None
@@ -266,14 +267,14 @@ mod tests {
     #[test]
     fn test_header_line_contents() -> ParseResult<'static, ()> {
         test_parser!(header_line_content("lao\n") -> @("\n", File {
-            name: "lao".to_string(),
+            path: "lao".to_string(),
             meta: None,
         }));
 
         test_parser!(header_line_content("lao 2002-02-21 23:30:39.942229878 -0800\n") -> @(
             "\n",
             File {
-                name: "lao".to_string(),
+                path: "lao".to_string(),
                 meta: Some(FileMetadata::DateTime(
                     DateTime::parse_from_rfc3339("2002-02-21T23:30:39.942229878-08:00").unwrap()
                 )),
@@ -283,7 +284,7 @@ mod tests {
         test_parser!(header_line_content("lao 2002-02-21 23:30:39 -0800\n") -> @(
             "\n",
             File {
-                name: "lao".to_string(),
+                path: "lao".to_string(),
                 meta: Some(FileMetadata::DateTime(
                     DateTime::parse_from_rfc3339("2002-02-21T23:30:39-08:00").unwrap()
                 )),
@@ -293,7 +294,7 @@ mod tests {
         test_parser!(header_line_content("lao 08f78e0addd5bf7b7aa8887e406493e75e8d2b55\n") -> @(
             "\n",
             File {
-                name: "lao".to_string(),
+                path: "lao".to_string(),
                 meta: Some(FileMetadata::Other("08f78e0addd5bf7b7aa8887e406493e75e8d2b55"))
             },
         ));
@@ -307,13 +308,13 @@ mod tests {
 +++ tzu 2002-02-21 23:30:50.442260588 -0800\n";
         test_parser!(headers(sample) -> (
             File {
-                name: "lao".to_string(),
+                path: "lao".to_string(),
                 meta: Some(FileMetadata::DateTime(
                     DateTime::parse_from_rfc3339("2002-02-21T23:30:39.942229878-08:00").unwrap()
                 )),
             },
             File {
-                name: "tzu".to_string(),
+                path: "tzu".to_string(),
                 meta: Some(FileMetadata::DateTime(
                     DateTime::parse_from_rfc3339("2002-02-21T23:30:50.442260588-08:00").unwrap()
                 )),
@@ -325,11 +326,11 @@ mod tests {
 +++ tzu\n";
         test_parser!(headers(sample2) -> (
             File {
-                name: "lao".to_string(),
+                path: "lao".to_string(),
                 meta: None,
             },
             File {
-                name: "tzu".to_string(),
+                path: "tzu".to_string(),
                 meta: None,
             },
         ));
@@ -339,13 +340,13 @@ mod tests {
 +++ tzu e044048282ce75186ecc7a214fd3d9ba478a2816\n";
         test_parser!(headers(sample3) -> (
             File {
-                name: "lao".to_string(),
+                path: "lao".to_string(),
                 meta: Some(FileMetadata::Other(
                     "08f78e0addd5bf7b7aa8887e406493e75e8d2b55"
                 )),
             },
             File {
-                name: "tzu".to_string(),
+                path: "tzu".to_string(),
                 meta: Some(FileMetadata::Other(
                     "e044048282ce75186ecc7a214fd3d9ba478a2816"
                 )),
@@ -429,13 +430,13 @@ mod tests {
 
         let expected = Patch {
             old: File {
-                name: "lao".to_string(),
+                path: "lao".to_string(),
                 meta: Some(FileMetadata::DateTime(
                     DateTime::parse_from_rfc3339("2002-02-21T23:30:39.942229878-08:00").unwrap(),
                 )),
             },
             new: File {
-                name: "tzu".to_string(),
+                path: "tzu".to_string(),
                 meta: Some(FileMetadata::DateTime(
                     DateTime::parse_from_rfc3339("2002-02-21T23:30:50.442260588-08:00").unwrap(),
                 )),
