@@ -28,44 +28,41 @@ pub(crate) fn parse_patch(s: &str) -> Result<Patch, ParseError> {
     }
 }
 
-/*
- * Filename parsing
- */
-
-named!(non_escape(Input) -> char, none_of!("\\\"\0\n\r\t"));
-
-named!(escape(Input) -> char,
+named!(patch(Input) -> Patch,
     do_parse!(
-        tag!("\\") >>
-        c: one_of!("\\\"0nrtb") >>
-        (c)
+        files: headers >>
+        hunks: chunks >>
+        no_newline: no_newline >>
+        ({
+            let (old, new) = files;
+            Patch {
+                old: old,
+                new: new,
+                hunks: hunks,
+                no_newline: no_newline,
+            }
+        })
     )
 );
 
-named!(unescape(Input) -> String,
-    map!(many1!(alt!(non_escape | escape)), |chars: Vec<char>| chars
-        .into_iter()
-        .collect::<String>())
-);
-
-named!(quoted(Input) -> String, delimited!(tag!("\""), unescape, tag!("\"")));
-
-named!(bare(Input) -> String,
-    map_res!(
-        map!(is_not!(" \n"), input_to_str),
-        str::FromStr::from_str
+// Header lines
+named!(headers(Input) -> (File, File),
+    do_parse!(
+        tag!("---") >>
+        space >>
+        oldfile: header_line_content >>
+        char!('\n') >>
+        tag!("+++") >>
+        space >>
+        newfile: header_line_content >>
+        char!('\n') >>
+        (oldfile, newfile)
     )
 );
-
-named!(fname(Input) -> String, alt!(quoted | bare));
-
-/*
- * Header lines
- */
 
 named!(header_line_content(Input) -> File,
     do_parse!(
-        filename: fname >>
+        filename: filename >>
         opt!(space) >>
         after: map!(take_until!("\n"), input_to_str) >>
         (File {
@@ -85,39 +82,21 @@ named!(header_line_content(Input) -> File,
     )
 );
 
-named!(headers(Input) -> (File, File),
+// Hunks of the file differences
+named!(chunks(Input) -> Vec<Hunk>, many1!(chunk));
+
+named!(chunk(Input) -> Hunk,
     do_parse!(
-        tag!("---") >>
-        space >>
-        oldfile: header_line_content >>
-        char!('\n') >>
-        tag!("+++") >>
-        space >>
-        newfile: header_line_content >>
-        char!('\n') >>
-        (oldfile, newfile)
-    )
-);
-
-/*
- * Chunk intro
- */
-
-named!(u64_digit(Input) -> u64,
-    map_res!(
-        map!(digit, input_to_str),
-        str::FromStr::from_str
-    )
-);
-
-named!(range(Input) -> Range,
-    do_parse!(
-        start: u64_digit
-            >> count: opt!(complete!(preceded!(tag!(","), u64_digit)))
-            >> (Range {
-                start: start,
-                count: count.unwrap_or(1)
-            })
+        ranges: chunk_intro >>
+        lines: many1!(chunk_line) >>
+        ({
+            let (old_range, new_range) = ranges;
+            Hunk {
+                old_range: old_range,
+                new_range: new_range,
+                lines: lines,
+            }
+        })
     )
 );
 
@@ -133,9 +112,23 @@ named!(chunk_intro(Input) -> (Range, Range),
     )
 );
 
-/*
- * Chunk lines
- */
+named!(range(Input) -> Range,
+    do_parse!(
+        start: u64_digit
+            >> count: opt!(complete!(preceded!(tag!(","), u64_digit)))
+            >> (Range {
+                start: start,
+                count: count.unwrap_or(1)
+            })
+    )
+);
+
+named!(u64_digit(Input) -> u64,
+    map_res!(
+        map!(digit, input_to_str),
+        str::FromStr::from_str
+    )
+);
 
 named!(chunk_line(Input) -> Line,
     alt!(
@@ -161,28 +154,7 @@ named!(chunk_line(Input) -> Line,
     )
 );
 
-named!(chunk(Input) -> Hunk,
-    do_parse!(
-        ranges: chunk_intro >>
-        lines: many1!(chunk_line) >>
-        ({
-            let (old_range, new_range) = ranges;
-            Hunk {
-                old_range: old_range,
-                new_range: new_range,
-                lines: lines,
-            }
-        })
-    )
-);
-
-// "Next come one or more hunks of differences"
-named!(chunks(Input) -> Vec<Hunk>, many1!(chunk));
-
-/*
- * Trailing newline indicator
- */
-
+// Trailing newline indicator
 named!(no_newline(Input) -> bool,
     map!(
         opt!(complete!(tag!("\\ No newline at end of file"))),
@@ -190,24 +162,31 @@ named!(no_newline(Input) -> bool,
     )
 );
 
-/*
- * The real deal
- */
+// Filename parsing
+named!(filename(Input) -> String, alt!(quoted | bare));
 
-named!(patch(Input) -> Patch,
+named!(quoted(Input) -> String, delimited!(tag!("\""), unescape, tag!("\"")));
+
+named!(bare(Input) -> String,
+    map_res!(
+        map!(is_not!(" \n"), input_to_str),
+        str::FromStr::from_str
+    )
+);
+
+named!(unescape(Input) -> String,
+    map!(many1!(alt!(non_escape | escape)), |chars: Vec<char>| chars
+        .into_iter()
+        .collect::<String>())
+);
+
+named!(non_escape(Input) -> char, none_of!("\\\"\0\n\r\t"));
+
+named!(escape(Input) -> char,
     do_parse!(
-        files: headers >>
-        hunks: chunks >>
-        no_newline: no_newline >>
-        ({
-            let (old, new) = files;
-            Patch {
-                old: old,
-                new: new,
-                hunks: hunks,
-                no_newline: no_newline,
-            }
-        })
+        tag!("\\") >>
+        c: one_of!("\\\"0nrtb") >>
+        (c)
     )
 );
 
@@ -247,19 +226,19 @@ mod tests {
     }
 
     #[test]
-    fn test_fname() {
+    fn test_filename() {
         assert_eq!(
-            fname("asdf ".into()).unwrap(),
+            filename("asdf ".into()).unwrap(),
             (" ".into(), "asdf".to_string())
         );
 
         assert_eq!(
-            fname("\"asdf\" ".into()).unwrap(),
+            filename("\"asdf\" ".into()).unwrap(),
             (" ".into(), "asdf".to_string())
         );
 
         assert_eq!(
-            fname("\"a s\\\"df\" ".into()).unwrap(),
+            filename("\"a s\\\"df\" ".into()).unwrap(),
             (" ".into(), "a s\"df".to_string())
         );
     }
