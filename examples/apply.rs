@@ -1,3 +1,5 @@
+//! Demonstrates how to apply a parsed diff to a file
+
 extern crate patch;
 
 use patch::{Line, Patch};
