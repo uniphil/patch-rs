@@ -8,44 +8,10 @@
 extern crate chrono;
 extern crate nom;
 
-use std::error::Error;
-
-use self::parser::patch;
-pub use self::parser::{File, FileMetadata, Hunk, Line, Patch, Range};
-
+mod error;
 mod parser;
+mod ast;
 
-#[derive(Debug)]
-pub enum PatchError<'a> {
-    ParseError(nom::Err<&'a [u8]>),
-}
-
-impl<'a> From<nom::Err<&'a [u8]>> for PatchError<'a> {
-    fn from(err: nom::Err<&'a [u8]>) -> Self {
-        PatchError::ParseError(err)
-    }
-}
-
-impl<'a> std::fmt::Display for PatchError<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            PatchError::ParseError(err) => write!(f, "Error while parsing: {}", err),
-        }
-    }
-}
-
-impl<'a> Error for PatchError<'a> {
-    fn description(&self) -> &str {
-        match self {
-            PatchError::ParseError(err) => err.description(),
-        }
-    }
-}
-
-pub fn parse(diff: &str) -> Result<Patch, PatchError> {
-    Ok(patch(diff.as_bytes()).map(|(remaining_input, patch)| {
-        // Parser should return an error instead of producing remaining input
-        assert!(remaining_input.is_empty(), "bug: failed to parse entire input");
-        patch
-    })?)
-}
+pub use ast::*;
+pub use parser::ParseError;
+pub use error::*;

@@ -1,5 +1,4 @@
-extern crate chrono;
-extern crate patch;
+use patch::Patch;
 
 #[test]
 fn test_parse() {
@@ -14,7 +13,7 @@ fn test_parse() {
 +eggy
 +hamster
  guido\n";
-    match patch::parse(sample) {
+    match sample.parse::<Patch>() {
         Ok(p) => {
             assert_eq!(
                 p.old,
@@ -53,7 +52,7 @@ fn test_parse_no_newline() {
 +hamster
  guido
 \\ No newline at end of file";
-    match patch::parse(sample) {
+    match sample.parse::<Patch>() {
         Ok(p) => {
             assert_eq!(
                 p.old,
@@ -91,7 +90,7 @@ fn test_parse_timestamps() {
 +eggy
 +hamster
  guido\n";
-    match patch::parse(sample) {
+    match sample.parse::<Patch>() {
         Ok(p) => {
             assert_eq!(
                 p.old,
@@ -134,7 +133,7 @@ fn test_parse_other() {
 +eggy
 +hamster
  guido\n";
-    match patch::parse(sample) {
+    match sample.parse::<Patch>() {
         Ok(p) => {
             assert_eq!(
                 p.old,

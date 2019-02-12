@@ -1,55 +1,40 @@
-use chrono::{DateTime, FixedOffset};
-use nom::*;
 use std::str;
 
-#[derive(Debug, Eq, PartialEq)]
-pub struct Patch<'a> {
-    pub old: File<'a>,
-    pub new: File<'a>,
-    pub hunks: Vec<Hunk<'a>>,
-    pub no_newline: bool,
+use chrono::DateTime;
+use nom::types::CompleteStr;
+use nom::*;
+
+use crate::ast::*;
+
+#[derive(Debug)]
+pub struct ParseError {}
+
+type Input<'a> = CompleteStr<'a>;
+
+fn input_to_str(input: Input) -> &str {
+    let CompleteStr(s) = input;
+    s
 }
 
-#[derive(Debug, Eq, PartialEq)]
-pub struct File<'a> {
-    pub name: String,
-    pub meta: Option<FileMetadata<'a>>,
-}
-
-#[derive(Debug, Eq, PartialEq)]
-pub enum FileMetadata<'a> {
-    DateTime(DateTime<FixedOffset>),
-    Other(&'a str),
-}
-
-#[derive(Debug, Eq, PartialEq)]
-pub struct Range {
-    pub start: u64,
-    pub count: u64,
-}
-
-#[derive(Debug, Eq, PartialEq)]
-pub struct Hunk<'a> {
-    pub old_range: Range,
-    pub new_range: Range,
-    pub lines: Vec<Line<'a>>,
-}
-
-#[derive(Debug, Eq, PartialEq)]
-pub enum Line<'a> {
-    Add(&'a str),
-    Remove(&'a str),
-    Context(&'a str),
+pub(crate) fn parse_patch(s: &str) -> Result<Patch, ParseError> {
+    let input = CompleteStr(s);
+    match patch(input) {
+        Ok((remaining_input, patch)) => {
+            // Parser should return an error instead of producing remaining input
+            assert!(remaining_input.is_empty(), "bug: failed to parse entire input");
+            Ok(patch)
+        },
+        Err(err) => unimplemented!(),
+    }
 }
 
 /*
  * Filename parsing
  */
 
-named!(non_escape<char>, none_of!("\\\"\0\n\r\t"));
+named!(non_escape(Input) -> char, none_of!("\\\"\0\n\r\t"));
 
-named!(
-    escape<char>,
+named!(escape(Input) -> char,
     do_parse!(
         tag!("\\") >>
         c: one_of!("\\\"0nrtb") >>
@@ -57,64 +42,60 @@ named!(
     )
 );
 
-named!(
-    unescape<String>,
+named!(unescape(Input) -> String,
     map!(many1!(alt!(non_escape | escape)), |chars: Vec<char>| chars
         .into_iter()
         .collect::<String>())
 );
 
-named!(quoted<String>, delimited!(tag!("\""), unescape, tag!("\"")));
+named!(quoted(Input) -> String, delimited!(tag!("\""), unescape, tag!("\"")));
 
-named!(
-    bare<String>,
+named!(bare(Input) -> String,
     map_res!(
-        map_res!(is_not!(" \n"), str::from_utf8),
+        map!(is_not!(" \n"), input_to_str),
         str::FromStr::from_str
     )
 );
 
-named!(fname<String>, alt!(quoted | bare));
+named!(fname(Input) -> String, alt!(quoted | bare));
 
 /*
  * Header lines
  */
 
-named!(
-    header_line_content<File>,
+named!(header_line_content(Input) -> File,
     do_parse!(
-        filename: fname
-            >> opt!(space)
-            >> after: map_res!(take_until!("\n"), str::from_utf8)
-            >> (File {
-                name: filename,
-                meta: {
-                    if after.is_empty() {
-                        None
-                    } else if let Ok(dt) = DateTime::parse_from_str(after, "%F %T%.f %z")
-                        .or_else(|_| DateTime::parse_from_str(after, "%F %T %z"))
-                    {
-                        Some(FileMetadata::DateTime(dt))
-                    } else {
-                        Some(FileMetadata::Other(after))
-                    }
-                },
-            })
+        filename: fname >>
+        opt!(space) >>
+        after: map!(take_until!("\n"), input_to_str) >>
+        (File {
+            name: filename,
+            meta: {
+                if after.is_empty() {
+                    None
+                } else if let Ok(dt) = DateTime::parse_from_str(after, "%F %T%.f %z")
+                    .or_else(|_| DateTime::parse_from_str(after, "%F %T %z"))
+                {
+                    Some(FileMetadata::DateTime(dt))
+                } else {
+                    Some(FileMetadata::Other(after))
+                }
+            },
+        })
     )
 );
 
-named!(
-    headers<(File, File)>,
+named!(headers(Input) -> (File, File),
     do_parse!(
-        tag!("---")
-            >> space
-            >> oldfile: header_line_content
-            >> newline
-            >> tag!("+++")
-            >> space
-            >> newfile: header_line_content
-            >> newline
-            >> (oldfile, newfile)
+        tag!("---") >>
+        space >>
+        oldfile: header_line_content >>
+        char!('\n') >>
+        tag!("+++") >>
+        space >>
+        newfile: header_line_content >>
+        char!('\n') >>
+        (oldfile, newfile)
     )
 );
 
@@ -122,16 +103,14 @@ named!(
  * Chunk intro
  */
 
-named!(
-    u64_digit<u64>,
+named!(u64_digit(Input) -> u64,
     map_res!(
-        map_res!(digit, str::from_utf8),
+        map!(digit, input_to_str),
         str::FromStr::from_str
     )
 );
 
-named!(
-    range<Range>,
+named!(range(Input) -> Range,
     do_parse!(
         start: u64_digit
             >> count: opt!(complete!(preceded!(tag!(","), u64_digit)))
@@ -142,16 +121,15 @@ named!(
     )
 );
 
-named!(
-    chunk_intro<(Range, Range)>,
+named!(chunk_intro(Input) -> (Range, Range),
     do_parse!(
-        tag!("@@ -")
-            >> old_range: range
-            >> tag!(" +")
-            >> new_range: range
-            >> tag!(" @@")
-            >> newline
-            >> (old_range, new_range)
+        tag!("@@ -") >>
+        old_range: range >>
+        tag!(" +") >>
+        new_range: range >>
+        tag!(" @@") >>
+        char!('\n') >>
+        (old_range, new_range)
     )
 );
 
@@ -159,59 +137,56 @@ named!(
  * Chunk lines
  */
 
-named!(
-    chunk_line<Line>,
+named!(chunk_line(Input) -> Line,
     alt!(
         map!(
-            map_res!(
+            map!(
                 preceded!(tag!("+"), take_until_and_consume!("\n")),
-                str::from_utf8
+                input_to_str
             ),
             Line::Add
         ) | map!(
-            map_res!(
+            map!(
                 preceded!(tag!("-"), take_until_and_consume!("\n")),
-                str::from_utf8
+                input_to_str
             ),
             Line::Remove
         ) | map!(
-            map_res!(
+            map!(
                 preceded!(tag!(" "), take_until_and_consume!("\n")),
-                str::from_utf8
+                input_to_str
             ),
             Line::Context
         )
     )
 );
 
-named!(
-    chunk<Hunk>,
+named!(chunk(Input) -> Hunk,
     do_parse!(
-        ranges: chunk_intro
-            >> lines: many1!(chunk_line)
-            >> ({
-                let (old_range, new_range) = ranges;
-                Hunk {
-                    old_range: old_range,
-                    new_range: new_range,
-                    lines: lines,
-                }
-            })
+        ranges: chunk_intro >>
+        lines: many1!(chunk_line) >>
+        ({
+            let (old_range, new_range) = ranges;
+            Hunk {
+                old_range: old_range,
+                new_range: new_range,
+                lines: lines,
+            }
+        })
     )
 );
 
 // "Next come one or more hunks of differences"
-named!(chunks<Vec<Hunk>>, many1!(chunk));
+named!(chunks(Input) -> Vec<Hunk>, many1!(chunk));
 
 /*
  * Trailing newline indicator
  */
 
-named!(
-    no_newline<bool>,
+named!(no_newline(Input) -> bool,
     map!(
         opt!(complete!(tag!("\\ No newline at end of file"))),
-        |matched: Option<&[u8]>| matched.is_none()
+        |matched: Option<_>| matched.is_none()
     )
 );
 
@@ -219,12 +194,12 @@ named!(
  * The real deal
  */
 
-named!(pub patch<Patch>,
+named!(patch(Input) -> Patch,
     do_parse!(
-           files: headers
-        >> hunks: chunks
-        >> no_newline: no_newline
-        >> ( {
+        files: headers >>
+        hunks: chunks >>
+        no_newline: no_newline >>
+        ({
             let (old, new) = files;
             Patch {
                 old: old,
@@ -243,56 +218,56 @@ mod tests {
     #[test]
     fn test_unescape() {
         assert_eq!(
-            unescape("file \\\"name\\\"".as_bytes()).unwrap(),
-            ("".as_bytes(), "file \"name\"".to_string())
+            unescape("file \\\"name\\\"".into()).unwrap(),
+            ("".into(), "file \"name\"".to_string())
         );
     }
 
     #[test]
     fn test_quoted() {
         assert_eq!(
-            quoted("\"file name\"".as_bytes()).unwrap(),
-            ("".as_bytes(), "file name".to_string())
+            quoted("\"file name\"".into()).unwrap(),
+            ("".into(), "file name".to_string())
         );
     }
 
     #[test]
     fn test_bare() {
         assert_eq!(
-            bare("file-name ".as_bytes()).unwrap(),
-            (" ".as_bytes(), "file-name".to_string())
+            bare("file-name ".into()).unwrap(),
+            (" ".into(), "file-name".to_string())
         );
 
         assert_eq!(
-            bare("file-name\n".as_bytes()).unwrap(),
-            ("\n".as_bytes(), "file-name".to_string())
+            bare("file-name\n".into()).unwrap(),
+            ("\n".into(), "file-name".to_string())
         );
     }
 
     #[test]
     fn test_fname() {
         assert_eq!(
-            fname("asdf ".as_bytes()).unwrap(),
-            (" ".as_bytes(), "asdf".to_string())
+            fname("asdf ".into()).unwrap(),
+            (" ".into(), "asdf".to_string())
         );
 
         assert_eq!(
-            fname("\"asdf\" ".as_bytes()).unwrap(),
-            (" ".as_bytes(), "asdf".to_string())
+            fname("\"asdf\" ".into()).unwrap(),
+            (" ".into(), "asdf".to_string())
         );
 
         assert_eq!(
-            fname("\"a s\\\"df\" ".as_bytes()).unwrap(),
-            (" ".as_bytes(), "a s\"df".to_string())
+            fname("\"a s\\\"df\" ".into()).unwrap(),
+            (" ".into(), "a s\"df".to_string())
         );
     }
 
     #[test]
     fn test_header_line_contents() {
         assert_eq!(
-            header_line_content("lao\n".as_bytes()).unwrap(),
+            header_line_content("lao\n".into()).unwrap(),
             (
-                "\n".as_bytes(),
+                "\n".into(),
                 File {
                     name: "lao".to_string(),
                     meta: None
@@ -301,9 +276,9 @@ mod tests {
         );
 
         assert_eq!(
-            header_line_content("lao 2002-02-21 23:30:39.942229878 -0800\n".as_bytes()).unwrap(),
+            header_line_content("lao 2002-02-21 23:30:39.942229878 -0800\n".into()).unwrap(),
             (
-                "\n".as_bytes(),
+                "\n".into(),
                 File {
                     name: "lao".to_string(),
                     meta: Some(FileMetadata::DateTime(
@@ -314,9 +289,9 @@ mod tests {
         );
 
         assert_eq!(
-            header_line_content("lao 2002-02-21 23:30:39 -0800\n".as_bytes()).unwrap(),
+            header_line_content("lao 2002-02-21 23:30:39 -0800\n".into()).unwrap(),
             (
-                "\n".as_bytes(),
+                "\n".into(),
                 File {
                     name: "lao".to_string(),
                     meta: Some(FileMetadata::DateTime(
@@ -327,9 +302,9 @@ mod tests {
         );
 
         assert_eq!(
-            header_line_content("lao 08f78e0addd5bf7b7aa8887e406493e75e8d2b55\n".as_bytes()).unwrap(),
+            header_line_content("lao 08f78e0addd5bf7b7aa8887e406493e75e8d2b55\n".into()).unwrap(),
             (
-                "\n".as_bytes(),
+                "\n".into(),
                 File {
                     name: "lao".to_string(),
                     meta: Some(FileMetadata::Other(
@@ -344,12 +319,11 @@ mod tests {
     fn test_headers() {
         let sample = "\
         --- lao 2002-02-21 23:30:39.942229878 -0800
-        +++ tzu 2002-02-21 23:30:50.442260588 -0800\n"
-        .as_bytes();
+        +++ tzu 2002-02-21 23:30:50.442260588 -0800\n";
         assert_eq!(
-            headers(sample).unwrap(),
+            headers(sample.into()).unwrap(),
             (
-                "".as_bytes(),
+                "".into(),
                 (
                     File {
                         name: "lao".to_string(),
@@ -371,12 +345,11 @@ mod tests {
 
         let sample2 = "\
         --- lao
-        +++ tzu\n"
-        .as_bytes();
+        +++ tzu\n";
         assert_eq!(
-            headers(sample2).unwrap(),
+            headers(sample2.into()).unwrap(),
             (
-                "".as_bytes(),
+                "".into(),
                 (
                     File {
                         name: "lao".to_string(),
@@ -392,12 +365,11 @@ mod tests {
 
         let sample3 = "\
         --- lao 08f78e0addd5bf7b7aa8887e406493e75e8d2b55
-        +++ tzu e044048282ce75186ecc7a214fd3d9ba478a2816\n"
-        .as_bytes();
+        +++ tzu e044048282ce75186ecc7a214fd3d9ba478a2816\n";
         assert_eq!(
-            headers(sample3).unwrap(),
+            headers(sample3.into()).unwrap(),
             (
-                "".as_bytes(),
+                "".into(),
                 (
                     File {
                         name: "lao".to_string(),
@@ -419,23 +391,23 @@ mod tests {
     #[test]
     fn test_range() {
         assert_eq!(
-            range("1,7".as_bytes()).unwrap(),
-            ("".as_bytes(), Range { start: 1, count: 7 })
+            range("1,7".into()).unwrap(),
+            ("".into(), Range { start: 1, count: 7 })
         );
 
         assert_eq!(
-            range("2".as_bytes()).unwrap(),
-            ("".as_bytes(), Range { start: 2, count: 1 })
+            range("2".into()).unwrap(),
+            ("".into(), Range { start: 2, count: 1 })
         );
     }
 
     #[test]
     fn test_chunk_intro() {
-        let sample = "@@ -1,7 +1,6 @@\n".as_bytes();
+        let sample = "@@ -1,7 +1,6 @@\n".into();
         assert_eq!(
             chunk_intro(sample).unwrap(),
             (
-                "".as_bytes(),
+                "".into(),
                 (Range { start: 1, count: 7 }, Range { start: 1, count: 6 }),
             )
         );
@@ -453,8 +425,7 @@ mod tests {
         +
         Therefore let there always be non-being,
         so we may see their subtlety,
-        And let there always be being,\n"
-        .as_bytes();
+        And let there always be being,\n";
         let expected = Hunk {
             old_range: Range { start: 1, count: 7 },
             new_range: Range { start: 1, count: 6 },
@@ -470,7 +441,7 @@ mod tests {
             Line::Context("And let there always be being,"),
             ],
         };
-        assert_eq!(chunk(sample).unwrap(), ("".as_bytes(), expected));
+        assert_eq!(chunk(sample.into()).unwrap(), ("".into(), expected));
     }
 
     #[test]
@@ -542,6 +513,6 @@ mod tests {
             no_newline: true,
         };
 
-        assert_eq!(patch(sample.as_bytes()).unwrap(), ("".as_bytes(), expected));
+        assert_eq!(patch(sample.into()).unwrap(), ("".into(), expected));
     }
 }

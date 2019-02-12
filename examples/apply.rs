@@ -1,6 +1,6 @@
 extern crate patch;
 
-use patch::{parse, Line, Patch};
+use patch::{Line, Patch};
 
 fn apply(diff: Patch, old: &str) -> String {
     let old_lines = old.lines().collect::<Vec<&str>>();
@@ -59,7 +59,7 @@ static RAW_DIFF: &'static str = "\
 ";
 
 fn main() {
-    let diff = parse(RAW_DIFF).unwrap();
+    let diff = RAW_DIFF.parse().unwrap();
     let new = apply(diff, LAO);
     println!("should be tzu:\n\n{}", new);
 }
