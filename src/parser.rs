@@ -81,6 +81,8 @@ named!(patch(Input) -> Patch,
 // Header lines
 named!(headers(Input) -> (File, File),
     do_parse!(
+        // Ignore any preamble lines in produced diffs
+        many0!(tuple!(not!(tag!("---")), take_until_and_consume!("\n"))) >>
         tag!("---") >>
         space >>
         oldfile: header_line_content >>
@@ -135,7 +137,8 @@ named!(chunk_intro(Input) -> (Range, Range),
         tag!(" +") >>
         new_range: range >>
         tag!(" @@") >>
-        char!('\n') >>
+        // Ignore any additional context provied after @@
+        take_until_and_consume!("\n") >>
         (old_range, new_range)
     )
 );

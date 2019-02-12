@@ -5,7 +5,11 @@
 [![docs.rs](https://docs.rs/patch/badge.svg)](https://docs.rs/patch)
 [![Lines of Code](https://tokei.rs/b1/github/uniphil/patch-rs)](https://github.com/uniphil/patch-rs)
 
-Parse and produce patch files in the [Unified Format].
+Rust crate for parsing and producing patch files in the [Unified Format].
+
+The parser attempts to be forgiving enough to be compatible with diffs produced
+by programs like git. It accomplishes this by ignoring the additional code
+context and information provided in the diff by those programs.
 
 See the **[Documentation]** for more information and for examples.
 

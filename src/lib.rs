@@ -3,6 +3,10 @@
 //! The format is not fully specified, but people like Guido van Rossum [have done the work][spec]
 //! to figure out the details.
 //!
+//! The parser attempts to be forgiving enough to be compatible with diffs produced by programs
+//! like git. It accomplishes this by ignoring the additional code context and information provided
+//! in the diff by those programs.
+//!
 //! ## Example
 //!
 //! ```
