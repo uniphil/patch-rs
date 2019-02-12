@@ -11,8 +11,11 @@ pub struct Patch<'a> {
     pub new: File<'a>,
     /// hunks of differences; each hunk shows one area where the files differ
     pub hunks: Vec<Hunk<'a>>,
-    /// true if the last line of the file doesn't end in a newline character
-    pub no_newline: bool,
+    /// true if the last line of the file ends in a newline character
+    ///
+    /// This will only be false if at the end of the patch we encounter the text:
+    /// `\ No newline at end of file`
+    pub end_newline: bool,
 }
 
 impl<'a> Patch<'a> {

@@ -71,15 +71,10 @@ named!(patch(Input) -> Patch,
     do_parse!(
         files: headers >>
         hunks: chunks >>
-        no_newline: no_newline >>
+        no_newline_indicator: no_newline_indicator >>
         ({
             let (old, new) = files;
-            Patch {
-                old: old,
-                new: new,
-                hunks: hunks,
-                no_newline: no_newline,
-            }
+            Patch {old, new, hunks, end_newline: !no_newline_indicator}
         })
     )
 );
@@ -194,10 +189,10 @@ named!(chunk_line(Input) -> Line,
 );
 
 // Trailing newline indicator
-named!(no_newline(Input) -> bool,
+named!(no_newline_indicator(Input) -> bool,
     map!(
         opt!(complete!(tag!("\\ No newline at end of file"))),
-        |matched: Option<_>| matched.is_none()
+        |matched| matched.is_some()
     )
 );
 
@@ -483,7 +478,7 @@ mod tests {
                     ],
                 },
             ],
-            no_newline: true,
+            end_newline: true,
         };
 
         test_parser!(patch(sample) -> expected);

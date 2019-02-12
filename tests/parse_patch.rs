@@ -29,7 +29,7 @@ fn test_parse() {
                     meta: None,
                 }
             );
-            assert_eq!(p.no_newline, true);
+            assert_eq!(p.end_newline, true);
         }
         Err(e) => {
             println!("{:?}", e);
@@ -39,7 +39,7 @@ fn test_parse() {
 }
 
 #[test]
-fn test_parse_no_newline() {
+fn test_parse_no_newline_indicator() {
     let sample = "\
 --- before.py
 +++ after.py
@@ -68,7 +68,7 @@ fn test_parse_no_newline() {
                     meta: None,
                 }
             );
-            assert_eq!(p.no_newline, false);
+            assert_eq!(p.end_newline, false);
         }
         Err(e) => {
             println!("{:?}", e);
@@ -111,7 +111,7 @@ fn test_parse_timestamps() {
                     )),
                 }
             );
-            assert_eq!(p.no_newline, true);
+            assert_eq!(p.end_newline, true);
         }
         Err(e) => {
             println!("{:?}", e);
@@ -153,7 +153,7 @@ fn test_parse_other() {
                     )),
                 }
             );
-            assert_eq!(p.no_newline, true);
+            assert_eq!(p.end_newline, true);
         }
         Err(e) => {
             println!("{:?}", e);
