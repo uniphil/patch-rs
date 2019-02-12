@@ -318,8 +318,8 @@ mod tests {
     #[test]
     fn test_headers() {
         let sample = "\
-        --- lao 2002-02-21 23:30:39.942229878 -0800
-        +++ tzu 2002-02-21 23:30:50.442260588 -0800\n";
+--- lao 2002-02-21 23:30:39.942229878 -0800
++++ tzu 2002-02-21 23:30:50.442260588 -0800\n";
         assert_eq!(
             headers(sample.into()).unwrap(),
             (
@@ -344,8 +344,8 @@ mod tests {
         );
 
         let sample2 = "\
-        --- lao
-        +++ tzu\n";
+--- lao
++++ tzu\n";
         assert_eq!(
             headers(sample2.into()).unwrap(),
             (
@@ -364,8 +364,8 @@ mod tests {
         );
 
         let sample3 = "\
-        --- lao 08f78e0addd5bf7b7aa8887e406493e75e8d2b55
-        +++ tzu e044048282ce75186ecc7a214fd3d9ba478a2816\n";
+--- lao 08f78e0addd5bf7b7aa8887e406493e75e8d2b55
++++ tzu e044048282ce75186ecc7a214fd3d9ba478a2816\n";
         assert_eq!(
             headers(sample3.into()).unwrap(),
             (
@@ -416,16 +416,16 @@ mod tests {
     #[test]
     fn test_chunk() {
         let sample = "\
-        @@ -1,7 +1,6 @@
-        -The Way that can be told of is not the eternal Way;
-        -The name that can be named is not the eternal name.
-        The Nameless is the origin of Heaven and Earth;
-        -The Named is the mother of all things.
-        +The named is the mother of all things.
-        +
-        Therefore let there always be non-being,
-        so we may see their subtlety,
-        And let there always be being,\n";
+@@ -1,7 +1,6 @@
+-The Way that can be told of is not the eternal Way;
+-The name that can be named is not the eternal name.
+ The Nameless is the origin of Heaven and Earth;
+-The Named is the mother of all things.
++The named is the mother of all things.
++
+ Therefore let there always be non-being,
+   so we may see their subtlety,
+ And let there always be being,\n";
         let expected = Hunk {
             old_range: Range { start: 1, count: 7 },
             new_range: Range { start: 1, count: 6 },
@@ -448,25 +448,25 @@ mod tests {
     fn test_patch() {
         // https://www.gnu.org/software/diffutils/manual/html_node/Example-Unified.html
         let sample = "\
-        --- lao 2002-02-21 23:30:39.942229878 -0800
-        +++ tzu 2002-02-21 23:30:50.442260588 -0800
-        @@ -1,7 +1,6 @@
-        -The Way that can be told of is not the eternal Way;
-        -The name that can be named is not the eternal name.
-        The Nameless is the origin of Heaven and Earth;
-        -The Named is the mother of all things.
-        +The named is the mother of all things.
-        +
-        Therefore let there always be non-being,
-        so we may see their subtlety,
-        And let there always be being,
-        @@ -9,3 +8,6 @@
-        The two are the same,
-        But after they are produced,
-        they have different names.
-        +They both may be called deep and profound.
-        +Deeper and more profound,
-        +The door of all subtleties!\n";
+--- lao 2002-02-21 23:30:39.942229878 -0800
++++ tzu 2002-02-21 23:30:50.442260588 -0800
+@@ -1,7 +1,6 @@
+-The Way that can be told of is not the eternal Way;
+-The name that can be named is not the eternal name.
+ The Nameless is the origin of Heaven and Earth;
+-The Named is the mother of all things.
++The named is the mother of all things.
++
+ Therefore let there always be non-being,
+   so we may see their subtlety,
+ And let there always be being,
+@@ -9,3 +8,6 @@
+ The two are the same,
+ But after they are produced,
+   they have different names.
++They both may be called deep and profound.
++Deeper and more profound,
++The door of all subtleties!\n";
 
         let expected = Patch {
             old: File {
