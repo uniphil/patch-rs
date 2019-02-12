@@ -207,10 +207,7 @@ named!(filename(Input) -> String, alt!(quoted | bare));
 named!(quoted(Input) -> String, delimited!(tag!("\""), unescape, tag!("\"")));
 
 named!(bare(Input) -> String,
-    map_res!(
-        map!(is_not!(" \n"), input_to_str),
-        str::FromStr::from_str
-    )
+    map!(is_not!(" \t\r\n"), |data| input_to_str(data).to_string())
 );
 
 named!(unescape(Input) -> String,
