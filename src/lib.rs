@@ -5,9 +5,6 @@
 //! [Unified Format]: https://www.gnu.org/software/diffutils/manual/html_node/Unified-Format.html#Unified-Format
 //! [spec]: http://www.artima.com/weblogs/viewpost.jsp?thread=164293
 
-extern crate chrono;
-extern crate nom;
-
 mod parser;
 mod ast;
 
