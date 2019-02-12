@@ -1,7 +1,6 @@
 extern crate patch;
 
-use patch::{Patch, Line, parse};
-
+use patch::{parse, Line, Patch};
 
 fn apply(diff: Patch, old: &str) -> String {
     let old_lines = old.lines().collect::<Vec<&str>>();
@@ -15,16 +14,13 @@ fn apply(diff: Patch, old: &str) -> String {
         old_line += hunk.old_range.count;
         for line in hunk.lines {
             match line {
-                Line::Add(s) | Line::Context(s) =>
-                    out.push(s),
-                Line::Remove(_) =>
-                    {},
+                Line::Add(s) | Line::Context(s) => out.push(s),
+                Line::Remove(_) => {}
             }
         }
     }
     out.join("\n")
 }
-
 
 static LAO: &'static str = "\
 The Way that can be told of is not the eternal Way;
@@ -39,7 +35,6 @@ The two are the same,
 But after they are produced,
   they have different names.
 ";
-
 
 static RAW_DIFF: &'static str = "\
 --- lao 2002-02-21 23:30:39.942229878 -0800
@@ -62,7 +57,6 @@ static RAW_DIFF: &'static str = "\
 +Deeper and more profound,
 +The door of all subtleties!
 ";
-
 
 fn main() {
     let diff = parse(RAW_DIFF).unwrap();

@@ -1,5 +1,5 @@
-extern crate patch;
 extern crate chrono;
+extern crate patch;
 
 #[test]
 fn test_parse() {
@@ -16,20 +16,26 @@ fn test_parse() {
  guido\n";
     match patch::parse(sample) {
         Ok(p) => {
-            assert_eq!(p.old, patch::File {
-                name: "before.py".to_string(),
-                meta: None,
-            });
-            assert_eq!(p.new, patch::File {
-                name: "after.py".to_string(),
-                meta: None,
-            });
+            assert_eq!(
+                p.old,
+                patch::File {
+                    name: "before.py".to_string(),
+                    meta: None,
+                }
+            );
+            assert_eq!(
+                p.new,
+                patch::File {
+                    name: "after.py".to_string(),
+                    meta: None,
+                }
+            );
             assert_eq!(p.no_newline, true);
-        },
+        }
         Err(e) => {
             println!("{:?}", e);
             panic!("failed to parse sample patch");
-        },
+        }
     }
 }
 
@@ -49,20 +55,26 @@ fn test_parse_no_newline() {
 \\ No newline at end of file";
     match patch::parse(sample) {
         Ok(p) => {
-            assert_eq!(p.old, patch::File {
-                name: "before.py".to_string(),
-                meta: None,
-            });
-            assert_eq!(p.new, patch::File {
-                name: "after.py".to_string(),
-                meta: None,
-            });
+            assert_eq!(
+                p.old,
+                patch::File {
+                    name: "before.py".to_string(),
+                    meta: None,
+                }
+            );
+            assert_eq!(
+                p.new,
+                patch::File {
+                    name: "after.py".to_string(),
+                    meta: None,
+                }
+            );
             assert_eq!(p.no_newline, false);
-        },
+        }
         Err(e) => {
             println!("{:?}", e);
             panic!("failed to parse sample patch");
-        },
+        }
     }
 }
 
@@ -81,20 +93,31 @@ fn test_parse_timestamps() {
  guido\n";
     match patch::parse(sample) {
         Ok(p) => {
-            assert_eq!(p.old, patch::File {
-                name: "before.py".to_string(),
-                meta: Some(patch::FileMetadata::DateTime(chrono::DateTime::parse_from_rfc3339("2002-02-21T23:30:39.942229878-08:00").unwrap())),
-            });
-            assert_eq!(p.new, patch::File {
-                name: "after.py".to_string(),
-                meta: Some(patch::FileMetadata::DateTime(chrono::DateTime::parse_from_rfc3339("2002-02-21T23:30:50-08:00").unwrap())),
-            });
+            assert_eq!(
+                p.old,
+                patch::File {
+                    name: "before.py".to_string(),
+                    meta: Some(patch::FileMetadata::DateTime(
+                        chrono::DateTime::parse_from_rfc3339("2002-02-21T23:30:39.942229878-08:00")
+                            .unwrap()
+                    )),
+                }
+            );
+            assert_eq!(
+                p.new,
+                patch::File {
+                    name: "after.py".to_string(),
+                    meta: Some(patch::FileMetadata::DateTime(
+                        chrono::DateTime::parse_from_rfc3339("2002-02-21T23:30:50-08:00").unwrap()
+                    )),
+                }
+            );
             assert_eq!(p.no_newline, true);
-        },
+        }
         Err(e) => {
             println!("{:?}", e);
             panic!("failed to parse sample patch");
-        },
+        }
     }
 }
 
@@ -113,19 +136,29 @@ fn test_parse_other() {
  guido\n";
     match patch::parse(sample) {
         Ok(p) => {
-            assert_eq!(p.old, patch::File {
-                name: "before.py".to_string(),
-                meta: Some(patch::FileMetadata::Other("08f78e0addd5bf7b7aa8887e406493e75e8d2b55")),
-            });
-            assert_eq!(p.new, patch::File {
-                name: "after.py".to_string(),
-                meta: Some(patch::FileMetadata::Other("e044048282ce75186ecc7a214fd3d9ba478a2816")),
-            });
+            assert_eq!(
+                p.old,
+                patch::File {
+                    name: "before.py".to_string(),
+                    meta: Some(patch::FileMetadata::Other(
+                        "08f78e0addd5bf7b7aa8887e406493e75e8d2b55"
+                    )),
+                }
+            );
+            assert_eq!(
+                p.new,
+                patch::File {
+                    name: "after.py".to_string(),
+                    meta: Some(patch::FileMetadata::Other(
+                        "e044048282ce75186ecc7a214fd3d9ba478a2816"
+                    )),
+                }
+            );
             assert_eq!(p.no_newline, true);
-        },
+        }
         Err(e) => {
             println!("{:?}", e);
             panic!("failed to parse sample patch");
-        },
+        }
     }
 }

@@ -5,15 +5,14 @@
 //! GVR also honed down the spec a bit more:
 //! http://www.artima.com/weblogs/viewpost.jsp?thread=164293
 
-#[macro_use]
-extern crate nom;
 extern crate chrono;
+extern crate nom;
 
+use nom::IResult;
 use std::error::Error;
-use nom::{IResult};
 
-pub use self::parser::{Patch, File, FileMetadata, Range, Hunk, Line};
-use self::parser::{patch};
+use self::parser::patch;
+pub use self::parser::{File, FileMetadata, Hunk, Line, Patch, Range};
 
 mod parser;
 
@@ -25,8 +24,7 @@ pub enum PatchError {
 impl std::fmt::Display for PatchError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match *self {
-            PatchError::ParseError =>
-                write!(f, "Error while parsing"),
+            PatchError::ParseError => write!(f, "Error while parsing"),
         }
     }
 }
@@ -34,18 +32,14 @@ impl std::fmt::Display for PatchError {
 impl Error for PatchError {
     fn description(&self) -> &str {
         match *self {
-            PatchError::ParseError =>
-                "parse error",
+            PatchError::ParseError => "parse error",
         }
     }
 }
 
-
 pub fn parse(diff: &str) -> Result<Patch, PatchError> {
     match patch(diff.as_bytes()) {
-        IResult::Done(_, p) =>
-            Ok(p),
-        IResult::Incomplete(_) | IResult::Error(_) =>
-            Err(PatchError::ParseError),
+        IResult::Done(_, p) => Ok(p),
+        IResult::Incomplete(_) | IResult::Error(_) => Err(PatchError::ParseError),
     }
 }

@@ -4,9 +4,10 @@ version = "0.4.2"
 authors = ["phil <uniphil@gmail.com>"]
 description = "Parse patches in the unified diff format"
 repository = "https://github.com/uniphil/patch-rs"
-readme = "readme.md"
+readme = "README.md"
 keywords = ["patch", "diff", "parse", "nom"]
 license = "MIT"
+edition = "2018"
 
 [dependencies]
 nom = "^2.0"
