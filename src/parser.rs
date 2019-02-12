@@ -1,6 +1,7 @@
 use std::str;
 
 use chrono::DateTime;
+use nom_locate::LocatedSpan;
 use nom::types::CompleteStr;
 use nom::*;
 
@@ -9,19 +10,24 @@ use crate::ast::*;
 #[derive(Debug)]
 pub struct ParseError {}
 
-type Input<'a> = CompleteStr<'a>;
+type Input<'a> = LocatedSpan<CompleteStr<'a>>;
+type ParseResult<'a, T> = Result<T, nom::Err<Input<'a>>>;
 
 fn input_to_str(input: Input) -> &str {
-    let CompleteStr(s) = input;
+    let CompleteStr(s) = input.fragment;
     s
 }
 
+fn str_to_input(s: &str) -> Input {
+    LocatedSpan::new(CompleteStr(s))
+}
+
 pub(crate) fn parse_patch(s: &str) -> Result<Patch, ParseError> {
-    let input = CompleteStr(s);
+    let input = str_to_input(s);
     match patch(input) {
         Ok((remaining_input, patch)) => {
             // Parser should return an error instead of producing remaining input
-            assert!(remaining_input.is_empty(), "bug: failed to parse entire input");
+            assert!(remaining_input.fragment.is_empty(), "bug: failed to parse entire input");
             Ok(patch)
         },
         Err(err) => unimplemented!(),
@@ -196,206 +202,159 @@ mod tests {
 
     use pretty_assertions::assert_eq;
 
-    #[test]
-    fn test_unescape() {
-        assert_eq!(
-            unescape("file \\\"name\\\"".into()).unwrap(),
-            ("".into(), "file \"name\"".to_string())
-        );
+    // Using a macro instead of a function so that error messages cite the most helpful line number
+    macro_rules! test_parser {
+        ($parser:ident($input:expr) -> @($expected_remaining_input:expr, $expected:expr $(,)*)) => {
+            let (remaining_input, result) = $parser(str_to_input($input))?;
+            assert_eq!(input_to_str(remaining_input), $expected_remaining_input,
+                "unexpected remaining input after parse");
+            assert_eq!(result, $expected);
+        };
+        ($parser:ident($input:expr) -> $expected:expr) => {
+            test_parser!($parser($input) -> @("", $expected));
+        };
     }
 
     #[test]
-    fn test_quoted() {
-        assert_eq!(
-            quoted("\"file name\"".into()).unwrap(),
-            ("".into(), "file name".to_string())
-        );
+    fn test_unescape() -> ParseResult<'static, ()> {
+        test_parser!(unescape("file \\\"name\\\"") -> "file \"name\"".to_string());
+        Ok(())
     }
 
     #[test]
-    fn test_bare() {
-        assert_eq!(
-            bare("file-name ".into()).unwrap(),
-            (" ".into(), "file-name".to_string())
-        );
-
-        assert_eq!(
-            bare("file-name\n".into()).unwrap(),
-            ("\n".into(), "file-name".to_string())
-        );
+    fn test_quoted() -> ParseResult<'static, ()> {
+        test_parser!(quoted("\"file name\"") -> "file name".to_string());
+        Ok(())
     }
 
     #[test]
-    fn test_filename() {
-        assert_eq!(
-            filename("asdf ".into()).unwrap(),
-            (" ".into(), "asdf".to_string())
-        );
+    fn test_bare() -> ParseResult<'static, ()> {
+        test_parser!(bare("file-name ") -> @(" ", "file-name".to_string()));
 
-        assert_eq!(
-            filename("\"asdf\" ".into()).unwrap(),
-            (" ".into(), "asdf".to_string())
-        );
-
-        assert_eq!(
-            filename("\"a s\\\"df\" ".into()).unwrap(),
-            (" ".into(), "a s\"df".to_string())
-        );
+        test_parser!(bare("file-name\n") -> @("\n", "file-name".to_string()));
+        Ok(())
     }
 
     #[test]
-    fn test_header_line_contents() {
-        assert_eq!(
-            header_line_content("lao\n".into()).unwrap(),
-            (
-                "\n".into(),
-                File {
-                    name: "lao".to_string(),
-                    meta: None
-                }
-            )
-        );
+    fn test_filename() -> ParseResult<'static, ()> {
+        test_parser!(filename("asdf ") -> @(" ", "asdf".to_string()));
 
-        assert_eq!(
-            header_line_content("lao 2002-02-21 23:30:39.942229878 -0800\n".into()).unwrap(),
-            (
-                "\n".into(),
-                File {
-                    name: "lao".to_string(),
-                    meta: Some(FileMetadata::DateTime(
-                        DateTime::parse_from_rfc3339("2002-02-21T23:30:39.942229878-08:00").unwrap()
-                    )),
-                }
-            )
-        );
+        test_parser!(filename("\"asdf\" ") -> @(" ", "asdf".to_string()));
 
-        assert_eq!(
-            header_line_content("lao 2002-02-21 23:30:39 -0800\n".into()).unwrap(),
-            (
-                "\n".into(),
-                File {
-                    name: "lao".to_string(),
-                    meta: Some(FileMetadata::DateTime(
-                        DateTime::parse_from_rfc3339("2002-02-21T23:30:39-08:00").unwrap()
-                    )),
-                }
-            )
-        );
-
-        assert_eq!(
-            header_line_content("lao 08f78e0addd5bf7b7aa8887e406493e75e8d2b55\n".into()).unwrap(),
-            (
-                "\n".into(),
-                File {
-                    name: "lao".to_string(),
-                    meta: Some(FileMetadata::Other(
-                        "08f78e0addd5bf7b7aa8887e406493e75e8d2b55"
-                    ))
-                }
-            )
-        );
+        test_parser!(filename("\"a s\\\"df\" ") -> @(" ", "a s\"df".to_string()));
+        Ok(())
     }
 
     #[test]
-    fn test_headers() {
+    fn test_header_line_contents() -> ParseResult<'static, ()> {
+        test_parser!(header_line_content("lao\n") -> @("\n", File {
+            name: "lao".to_string(),
+            meta: None,
+        }));
+
+        test_parser!(header_line_content("lao 2002-02-21 23:30:39.942229878 -0800\n") -> @(
+            "\n",
+            File {
+                name: "lao".to_string(),
+                meta: Some(FileMetadata::DateTime(
+                    DateTime::parse_from_rfc3339("2002-02-21T23:30:39.942229878-08:00").unwrap()
+                )),
+            },
+        ));
+
+        test_parser!(header_line_content("lao 2002-02-21 23:30:39 -0800\n") -> @(
+            "\n",
+            File {
+                name: "lao".to_string(),
+                meta: Some(FileMetadata::DateTime(
+                    DateTime::parse_from_rfc3339("2002-02-21T23:30:39-08:00").unwrap()
+                )),
+            },
+        ));
+
+        test_parser!(header_line_content("lao 08f78e0addd5bf7b7aa8887e406493e75e8d2b55\n") -> @(
+            "\n",
+            File {
+                name: "lao".to_string(),
+                meta: Some(FileMetadata::Other("08f78e0addd5bf7b7aa8887e406493e75e8d2b55"))
+            },
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn test_headers() -> ParseResult<'static, ()> {
         let sample = "\
 --- lao 2002-02-21 23:30:39.942229878 -0800
 +++ tzu 2002-02-21 23:30:50.442260588 -0800\n";
-        assert_eq!(
-            headers(sample.into()).unwrap(),
-            (
-                "".into(),
-                (
-                    File {
-                        name: "lao".to_string(),
-                        meta: Some(FileMetadata::DateTime(
-                            DateTime::parse_from_rfc3339("2002-02-21T23:30:39.942229878-08:00")
-                            .unwrap()
-                        )),
-                    },
-                    File {
-                        name: "tzu".to_string(),
-                        meta: Some(FileMetadata::DateTime(
-                            DateTime::parse_from_rfc3339("2002-02-21T23:30:50.442260588-08:00")
-                            .unwrap()
-                        )),
-                    }
-                )
-            )
-        );
+        test_parser!(headers(sample) -> (
+            File {
+                name: "lao".to_string(),
+                meta: Some(FileMetadata::DateTime(
+                    DateTime::parse_from_rfc3339("2002-02-21T23:30:39.942229878-08:00").unwrap()
+                )),
+            },
+            File {
+                name: "tzu".to_string(),
+                meta: Some(FileMetadata::DateTime(
+                    DateTime::parse_from_rfc3339("2002-02-21T23:30:50.442260588-08:00").unwrap()
+                )),
+            },
+        ));
 
         let sample2 = "\
 --- lao
 +++ tzu\n";
-        assert_eq!(
-            headers(sample2.into()).unwrap(),
-            (
-                "".into(),
-                (
-                    File {
-                        name: "lao".to_string(),
-                        meta: None,
-                    },
-                    File {
-                        name: "tzu".to_string(),
-                        meta: None,
-                    }
-                )
-            )
-        );
+        test_parser!(headers(sample2) -> (
+            File {
+                name: "lao".to_string(),
+                meta: None,
+            },
+            File {
+                name: "tzu".to_string(),
+                meta: None,
+            },
+        ));
 
         let sample3 = "\
 --- lao 08f78e0addd5bf7b7aa8887e406493e75e8d2b55
 +++ tzu e044048282ce75186ecc7a214fd3d9ba478a2816\n";
-        assert_eq!(
-            headers(sample3.into()).unwrap(),
-            (
-                "".into(),
-                (
-                    File {
-                        name: "lao".to_string(),
-                        meta: Some(FileMetadata::Other(
-                            "08f78e0addd5bf7b7aa8887e406493e75e8d2b55"
-                        )),
-                    },
-                    File {
-                        name: "tzu".to_string(),
-                        meta: Some(FileMetadata::Other(
-                            "e044048282ce75186ecc7a214fd3d9ba478a2816"
-                        )),
-                    }
-                )
-            )
-        );
+        test_parser!(headers(sample3) -> (
+            File {
+                name: "lao".to_string(),
+                meta: Some(FileMetadata::Other(
+                    "08f78e0addd5bf7b7aa8887e406493e75e8d2b55"
+                )),
+            },
+            File {
+                name: "tzu".to_string(),
+                meta: Some(FileMetadata::Other(
+                    "e044048282ce75186ecc7a214fd3d9ba478a2816"
+                )),
+            },
+        ));
+        Ok(())
     }
 
     #[test]
-    fn test_range() {
-        assert_eq!(
-            range("1,7".into()).unwrap(),
-            ("".into(), Range { start: 1, count: 7 })
-        );
+    fn test_range() -> ParseResult<'static, ()> {
+        test_parser!(range("1,7") -> Range { start: 1, count: 7 });
 
-        assert_eq!(
-            range("2".into()).unwrap(),
-            ("".into(), Range { start: 2, count: 1 })
-        );
+        test_parser!(range("2") -> Range { start: 2, count: 1 });
+        Ok(())
     }
 
     #[test]
-    fn test_chunk_intro() {
-        let sample = "@@ -1,7 +1,6 @@\n".into();
-        assert_eq!(
-            chunk_intro(sample).unwrap(),
-            (
-                "".into(),
-                (Range { start: 1, count: 7 }, Range { start: 1, count: 6 }),
-            )
-        );
+    fn test_chunk_intro() -> ParseResult<'static, ()> {
+        test_parser!(chunk_intro("@@ -1,7 +1,6 @@\n") -> (
+            Range { start: 1, count: 7 },
+            Range { start: 1, count: 6 },
+        ));
+        Ok(())
     }
 
     #[test]
-    fn test_chunk() {
+    fn test_chunk() -> ParseResult<'static, ()> {
         let sample = "\
 @@ -1,7 +1,6 @@
 -The Way that can be told of is not the eternal Way;
@@ -411,22 +370,23 @@ mod tests {
             old_range: Range { start: 1, count: 7 },
             new_range: Range { start: 1, count: 6 },
             lines: vec![
-            Line::Remove("The Way that can be told of is not the eternal Way;"),
-            Line::Remove("The name that can be named is not the eternal name."),
-            Line::Context("The Nameless is the origin of Heaven and Earth;"),
-            Line::Remove("The Named is the mother of all things."),
-            Line::Add("The named is the mother of all things."),
-            Line::Add(""),
-            Line::Context("Therefore let there always be non-being,"),
-            Line::Context("  so we may see their subtlety,"),
-            Line::Context("And let there always be being,"),
+                Line::Remove("The Way that can be told of is not the eternal Way;"),
+                Line::Remove("The name that can be named is not the eternal name."),
+                Line::Context("The Nameless is the origin of Heaven and Earth;"),
+                Line::Remove("The Named is the mother of all things."),
+                Line::Add("The named is the mother of all things."),
+                Line::Add(""),
+                Line::Context("Therefore let there always be non-being,"),
+                Line::Context("  so we may see their subtlety,"),
+                Line::Context("And let there always be being,"),
             ],
         };
-        assert_eq!(chunk(sample.into()).unwrap(), ("".into(), expected));
+        test_parser!(chunk(sample) -> expected);
+        Ok(())
     }
 
     #[test]
-    fn test_patch() {
+    fn test_patch() -> ParseResult<'static, ()> {
         // https://www.gnu.org/software/diffutils/manual/html_node/Example-Unified.html
         let sample = "\
 --- lao 2002-02-21 23:30:39.942229878 -0800
@@ -463,37 +423,38 @@ mod tests {
                 )),
             },
             hunks: vec![
-            Hunk {
-                old_range: Range { start: 1, count: 7 },
-                new_range: Range { start: 1, count: 6 },
-                lines: vec![
-                Line::Remove("The Way that can be told of is not the eternal Way;"),
-                Line::Remove("The name that can be named is not the eternal name."),
-                Line::Context("The Nameless is the origin of Heaven and Earth;"),
-                Line::Remove("The Named is the mother of all things."),
-                Line::Add("The named is the mother of all things."),
-                Line::Add(""),
-                Line::Context("Therefore let there always be non-being,"),
-                Line::Context("  so we may see their subtlety,"),
-                Line::Context("And let there always be being,"),
-                ],
-            },
-            Hunk {
-                old_range: Range { start: 9, count: 3 },
-                new_range: Range { start: 8, count: 6 },
-                lines: vec![
-                Line::Context("The two are the same,"),
-                Line::Context("But after they are produced,"),
-                Line::Context("  they have different names."),
-                Line::Add("They both may be called deep and profound."),
-                Line::Add("Deeper and more profound,"),
-                Line::Add("The door of all subtleties!"),
-                ],
-            },
+                Hunk {
+                    old_range: Range { start: 1, count: 7 },
+                    new_range: Range { start: 1, count: 6 },
+                    lines: vec![
+                        Line::Remove("The Way that can be told of is not the eternal Way;"),
+                        Line::Remove("The name that can be named is not the eternal name."),
+                        Line::Context("The Nameless is the origin of Heaven and Earth;"),
+                        Line::Remove("The Named is the mother of all things."),
+                        Line::Add("The named is the mother of all things."),
+                        Line::Add(""),
+                        Line::Context("Therefore let there always be non-being,"),
+                        Line::Context("  so we may see their subtlety,"),
+                        Line::Context("And let there always be being,"),
+                    ],
+                },
+                Hunk {
+                    old_range: Range { start: 9, count: 3 },
+                    new_range: Range { start: 8, count: 6 },
+                    lines: vec![
+                        Line::Context("The two are the same,"),
+                        Line::Context("But after they are produced,"),
+                        Line::Context("  they have different names."),
+                        Line::Add("They both may be called deep and profound."),
+                        Line::Add("Deeper and more profound,"),
+                        Line::Add("The door of all subtleties!"),
+                    ],
+                },
             ],
             no_newline: true,
         };
 
-        assert_eq!(patch(sample.into()).unwrap(), ("".into(), expected));
+        test_parser!(patch(sample) -> expected);
+        Ok(())
     }
 }
