@@ -13,7 +13,7 @@ fn test_parse() {
 +eggy
 +hamster
  guido\n";
-    match sample.parse::<Patch>() {
+    match Patch::from_str(sample) {
         Ok(p) => {
             assert_eq!(
                 p.old,
@@ -52,7 +52,7 @@ fn test_parse_no_newline() {
 +hamster
  guido
 \\ No newline at end of file";
-    match sample.parse::<Patch>() {
+    match Patch::from_str(sample) {
         Ok(p) => {
             assert_eq!(
                 p.old,
@@ -90,7 +90,7 @@ fn test_parse_timestamps() {
 +eggy
 +hamster
  guido\n";
-    match sample.parse::<Patch>() {
+    match Patch::from_str(sample) {
         Ok(p) => {
             assert_eq!(
                 p.old,
@@ -133,7 +133,7 @@ fn test_parse_other() {
 +eggy
 +hamster
  guido\n";
-    match sample.parse::<Patch>() {
+    match Patch::from_str(sample) {
         Ok(p) => {
             assert_eq!(
                 p.old,

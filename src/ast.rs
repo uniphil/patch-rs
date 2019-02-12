@@ -1,8 +1,6 @@
-use std::str::FromStr;
-
 use chrono::{DateTime, FixedOffset};
 
-use crate::parser::ParseError;
+use crate::parser::{parse_patch, ParseError};
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct Patch<'a> {
@@ -12,11 +10,10 @@ pub struct Patch<'a> {
     pub no_newline: bool,
 }
 
-impl<'a> FromStr for Patch<'a> {
-    type Err = ParseError<'a>;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        unimplemented!()
+impl<'a> Patch<'a> {
+    /// Attempt to parse a patch from the given string
+    pub fn from_str(s: &'a str) -> Result<Self, ParseError<'a>> {
+        parse_patch(s)
     }
 }
 
