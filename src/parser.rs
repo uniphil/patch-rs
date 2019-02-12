@@ -11,11 +11,14 @@ use crate::ast::*;
 
 type Input<'a> = LocatedSpan<CompleteStr<'a>>;
 
-/// Error parsing patch format
+/// Type returned when an error occurs while parsing a patch
 #[derive(Debug, Clone)]
 pub struct ParseError<'a> {
+    /// The line where the parsing error occurred
     pub line: u32,
+    /// The offset on the line where the parsing error occurred
     pub offset: usize,
+    /// The actual parsing error
     pub err: nom::Err<&'a str>,
 }
 
