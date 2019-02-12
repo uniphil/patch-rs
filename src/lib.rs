@@ -8,10 +8,8 @@
 extern crate chrono;
 extern crate nom;
 
-mod error;
 mod parser;
 mod ast;
 
 pub use ast::*;
 pub use parser::ParseError;
-pub use error::*;
