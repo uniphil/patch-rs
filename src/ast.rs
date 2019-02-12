@@ -13,7 +13,7 @@ pub struct Patch<'a> {
 }
 
 impl<'a> FromStr for Patch<'a> {
-    type Err = ParseError;
+    type Err = ParseError<'a>;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         unimplemented!()

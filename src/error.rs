@@ -1,20 +1,18 @@
 use std::error::Error;
 
+use crate::parser::ParseError;
+
 #[derive(Debug)]
 pub enum PatchError<'a> {
-    ParseError(nom::Err<&'a [u8]>),
-}
-
-impl<'a> From<nom::Err<&'a [u8]>> for PatchError<'a> {
-    fn from(err: nom::Err<&'a [u8]>) -> Self {
-        PatchError::ParseError(err)
-    }
+    ParseError(ParseError<'a>),
 }
 
 impl<'a> std::fmt::Display for PatchError<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            PatchError::ParseError(err) => write!(f, "Error while parsing: {}", err),
+            PatchError::ParseError(ParseError {line, offset, err}) => {
+                write!(f, "Line {}:{}: Error while parsing: {}", line, offset, err)
+            },
         }
     }
 }
@@ -22,7 +20,7 @@ impl<'a> std::fmt::Display for PatchError<'a> {
 impl<'a> Error for PatchError<'a> {
     fn description(&self) -> &str {
         match self {
-            PatchError::ParseError(err) => err.description(),
+            PatchError::ParseError(ParseError {err, ..}) => err.description(),
         }
     }
 }

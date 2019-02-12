@@ -3,15 +3,36 @@ use std::str;
 use chrono::DateTime;
 use nom_locate::LocatedSpan;
 use nom::types::CompleteStr;
+use nom::simple_errors::Context;
 use nom::*;
 
 use crate::ast::*;
 
-#[derive(Debug)]
-pub struct ParseError {}
-
 type Input<'a> = LocatedSpan<CompleteStr<'a>>;
-type ParseResult<'a, T> = Result<T, nom::Err<Input<'a>>>;
+
+#[derive(Debug)]
+pub struct ParseError<'a> {
+    pub line: u32,
+    pub offset: usize,
+    pub err: nom::Err<&'a str>,
+}
+
+#[doc(hidden)]
+impl<'a> From<nom::Err<Input<'a>>> for ParseError<'a> {
+    fn from(err: nom::Err<Input<'a>>) -> Self {
+        match err {
+            nom::Err::Incomplete(_) => unreachable!("bug: parser should not return incomplete"),
+            nom::Err::Error(_) => unreachable!("bug: parser should only succeed or fail"),
+            nom::Err::Failure(ctx) => match ctx {
+                Context::Code(input, kind) => {
+                    let LocatedSpan {line, offset, fragment: CompleteStr(input)} = input;
+                    let err = nom::Err::Failure(Context::Code(input, kind));
+                    Self {line, offset, err}
+                },
+            },
+        }
+    }
+}
 
 fn input_to_str(input: Input) -> &str {
     let CompleteStr(s) = input.fragment;
@@ -23,15 +44,10 @@ fn str_to_input(s: &str) -> Input {
 }
 
 pub(crate) fn parse_patch(s: &str) -> Result<Patch, ParseError> {
-    let input = str_to_input(s);
-    match patch(input) {
-        Ok((remaining_input, patch)) => {
-            // Parser should return an error instead of producing remaining input
-            assert!(remaining_input.fragment.is_empty(), "bug: failed to parse entire input");
-            Ok(patch)
-        },
-        Err(err) => unimplemented!(),
-    }
+    let (remaining_input, patch) = patch(str_to_input(s))?;
+    // Parser should return an error instead of producing remaining input
+    assert!(remaining_input.fragment.is_empty(), "bug: failed to parse entire input");
+    Ok(patch)
 }
 
 named!(patch(Input) -> Patch,
@@ -201,6 +217,8 @@ mod tests {
     use super::*;
 
     use pretty_assertions::assert_eq;
+
+    type ParseResult<'a, T> = Result<T, nom::Err<Input<'a>>>;
 
     // Using a macro instead of a function so that error messages cite the most helpful line number
     macro_rules! test_parser {
