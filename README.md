@@ -1,30 +1,13 @@
 # Patch
 
-Parse unified diffs with rust
-
 [![Build Status](https://travis-ci.org/uniphil/patch-rs.svg?branch=master)](https://travis-ci.org/uniphil/patch-rs)
 [![Crates.io Badge](https://img.shields.io/crates/v/patch.svg)](https://crates.io/crates/patch)
+[![docs.rs](https://docs.rs/patch/badge.svg)](https://docs.rs/patch)
+[![Lines of Code](https://tokei.rs/b1/github/uniphil/patch-rs)](https://github.com/uniphil/patch-rs)
 
-```rust
-extern crate patch;
-use patch::{parse};
+Parse and produce patch files in the [Unified Format].
 
-let sample = "\
---- before.py
-+++ after.py
-@@ -1,4 +1,4 @@
--bacon
--eggs
--ham
-+python
-+eggy
-+hamster
- guido\n";
+See the **[Documentation]** for more information and for examples.
 
-if let Ok(patch) = parse(sample) {
-    assert_eq!(&patch.old.name, "before.py");
-    assert_eq!(&patch.new.name, "after.py");
-} else {
-    panic!("failed to parse sample patch");
-}
-```
+[Unified Format]: https://www.gnu.org/software/diffutils/manual/html_node/Unified-Format.html
+[Documentation]: https://docs.rs/patch
