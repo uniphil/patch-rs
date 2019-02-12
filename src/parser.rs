@@ -26,7 +26,8 @@ impl<'a> From<nom::Err<Input<'a>>> for ParseError<'a> {
     fn from(err: nom::Err<Input<'a>>) -> Self {
         match err {
             nom::Err::Incomplete(_) => unreachable!("bug: parser should not return incomplete"),
-            nom::Err::Error(_) => unreachable!("bug: parser should only succeed or fail"),
+            // Unify both error types because at this point the error is not recoverable
+            nom::Err::Error(ctx) |
             nom::Err::Failure(ctx) => match ctx {
                 Context::Code(input, kind) => {
                     let LocatedSpan {line, offset, fragment: CompleteStr(input)} = input;
@@ -59,12 +60,30 @@ fn str_to_input(s: &str) -> Input {
     LocatedSpan::new(CompleteStr(s))
 }
 
-pub(crate) fn parse_patch(s: &str) -> Result<Patch, ParseError> {
-    let (remaining_input, patch) = patch(str_to_input(s))?;
+pub(crate) fn parse_single_patch(s: &str) -> Result<Patch, ParseError> {
+    let (remaining_input, patch) = single_patch(str_to_input(s))?;
     // Parser should return an error instead of producing remaining input
-    assert!(remaining_input.fragment.is_empty(), "bug: failed to parse entire input");
+    assert!(remaining_input.fragment.is_empty(), "bug: failed to parse entire input. \
+        Remaining: '{}'", input_to_str(remaining_input));
     Ok(patch)
 }
+
+pub(crate) fn parse_multiple_patches(s: &str) -> Result<Vec<Patch>, ParseError> {
+    let (remaining_input, patches) = multiple_patches(str_to_input(s))?;
+    // Parser should return an error instead of producing remaining input
+    assert!(remaining_input.fragment.is_empty(), "bug: failed to parse entire input");
+    Ok(patches)
+}
+
+named!(multiple_patches(Input) -> Vec<Patch>,
+    many1!(patch)
+);
+
+named!(single_patch(Input) -> Patch, do_parse!(
+    p: patch >>
+    eof!() >>
+    (p)
+));
 
 named!(patch(Input) -> Patch,
     do_parse!(
@@ -185,7 +204,7 @@ named!(chunk_line(Input) -> Line,
 // Trailing newline indicator
 named!(no_newline_indicator(Input) -> bool,
     map!(
-        opt!(complete!(tag!("\\ No newline at end of file"))),
+        opt!(tag!("\\ No newline at end of file")),
         |matched| matched.is_some()
     )
 );

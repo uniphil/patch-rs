@@ -26,7 +26,7 @@
 //! +hamster
 //!  guido\n";
 //!
-//! let patch = Patch::from_str(sample)?;
+//! let patch = Patch::from_single(sample)?;
 //! assert_eq!(&patch.old.path, "before.py");
 //! assert_eq!(&patch.new.path, "path/to/after.py");
 //!

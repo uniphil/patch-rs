@@ -59,7 +59,7 @@ static RAW_DIFF: &'static str = "\
 ";
 
 fn main() {
-    let diff = Patch::from_str(RAW_DIFF).unwrap();
+    let diff = Patch::from_single(RAW_DIFF).unwrap();
     let new = apply(diff, LAO);
     println!("should be tzu:\n\n{}", new);
 }
