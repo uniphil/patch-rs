@@ -1,6 +1,7 @@
 //! Parse and produce patch files (diffs) in the [Unified Format].
 //!
-//! More info: Guido van Rossum also [honed down the spec][spec] a bit more.
+//! The format is not fully specified, but people like Guido van Rossum [have done the work][spec]
+//! to figure out the details.
 //!
 //! ## Example
 //!
