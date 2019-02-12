@@ -1,4 +1,3 @@
-use std::str;
 use std::error::Error;
 
 use chrono::DateTime;
@@ -153,10 +152,7 @@ named!(range(Input) -> Range,
 );
 
 named!(u64_digit(Input) -> u64,
-    map_res!(
-        map!(digit, input_to_str),
-        str::FromStr::from_str
-    )
+    map_res!(digit, |input| input_to_str(input).parse())
 );
 
 named!(chunk_line(Input) -> Line,
