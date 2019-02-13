@@ -101,12 +101,10 @@ named!(headers(Input) -> (File, File),
     do_parse!(
         // Ignore any preamble lines in produced diffs
         many0!(tuple!(not!(tag!("---")), take_until_and_consume!("\n"))) >>
-        tag!("---") >>
-        space >>
+        tag!("--- ") >>
         oldfile: header_line_content >>
         char!('\n') >>
-        tag!("+++") >>
-        space >>
+        tag!("+++ ") >>
         newfile: header_line_content >>
         char!('\n') >>
         (oldfile, newfile)
@@ -121,10 +119,12 @@ named!(header_line_content(Input) -> File,
             path: filename,
             meta: after.and_then(|after| match after {
                 "" => None,
-                _ => Some(DateTime::parse_from_str(after, "%F %T%.f %z")
-                    .or_else(|_| DateTime::parse_from_str(after, "%F %T %z"))
-                    .ok()
-                    .map_or_else(|| FileMetadata::Other(after), FileMetadata::DateTime)),
+                _ => Some(
+                    DateTime::parse_from_str(after, "%F %T%.f %z")
+                        .or_else(|_| DateTime::parse_from_str(after, "%F %T %z"))
+                        .ok()
+                        .map_or_else(|| FileMetadata::Other(after), FileMetadata::DateTime)
+                ),
             }),
         })
     )
@@ -135,7 +135,7 @@ named!(chunks(Input) -> Vec<Hunk>, many1!(chunk));
 
 named!(chunk(Input) -> Hunk,
     do_parse!(
-        ranges: chunk_intro >>
+        ranges: chunk_header >>
         lines: many1!(chunk_line) >>
         ({
             let (old_range, new_range) = ranges;
@@ -148,14 +148,14 @@ named!(chunk(Input) -> Hunk,
     )
 );
 
-named!(chunk_intro(Input) -> (Range, Range),
+named!(chunk_header(Input) -> (Range, Range),
     do_parse!(
         tag!("@@ -") >>
         old_range: range >>
         tag!(" +") >>
         new_range: range >>
         tag!(" @@") >>
-        // Ignore any additional context provied after @@
+        // Ignore any additional context provied after @@ (git sometimes adds this)
         take_until_and_consume!("\n") >>
         (old_range, new_range)
     )
@@ -163,12 +163,9 @@ named!(chunk_intro(Input) -> (Range, Range),
 
 named!(range(Input) -> Range,
     do_parse!(
-        start: u64_digit
-            >> count: opt!(complete!(preceded!(tag!(","), u64_digit)))
-            >> (Range {
-                start: start,
-                count: count.unwrap_or(1)
-            })
+        start: u64_digit >>
+        count: opt!(preceded!(tag!(","), u64_digit)) >>
+        (Range {start: start, count: count.unwrap_or(1)})
     )
 );
 
@@ -178,25 +175,15 @@ named!(u64_digit(Input) -> u64,
 
 named!(chunk_line(Input) -> Line,
     alt!(
-        map!(
-            map!(
-                preceded!(tag!("+"), take_until_and_consume!("\n")),
-                input_to_str
-            ),
-            Line::Add
-        ) | map!(
-            map!(
-                preceded!(tag!("-"), take_until_and_consume!("\n")),
-                input_to_str
-            ),
-            Line::Remove
-        ) | map!(
-            map!(
-                preceded!(tag!(" "), take_until_and_consume!("\n")),
-                input_to_str
-            ),
-            Line::Context
-        )
+        preceded!(tag!("+"), take_until_and_consume!("\n")) => {
+            |line| Line::Add(input_to_str(line))
+        } |
+        preceded!(tag!("-"), take_until_and_consume!("\n")) => {
+            |line| Line::Remove(input_to_str(line))
+        } |
+        preceded!(tag!(" "), take_until_and_consume!("\n")) => {
+            |line| Line::Context(input_to_str(line))
+        }
     )
 );
 
@@ -209,28 +196,31 @@ named!(no_newline_indicator(Input) -> bool,
 );
 
 // Filename parsing
-named!(filename(Input) -> Cow<str>, alt!(quoted | bare));
+named!(filename(Input) -> Cow<str>,
+    alt!(quoted | bare)
+);
 
-named!(quoted(Input) -> Cow<str>, delimited!(tag!("\""), unescape, tag!("\"")));
+named!(quoted(Input) -> Cow<str>,
+    delimited!(tag!("\""), unescape, tag!("\""))
+);
 
 named!(bare(Input) -> Cow<str>,
     map!(is_not!(" \t\r\n"), |data| input_to_str(data).into())
 );
 
 named!(unescape(Input) -> Cow<str>,
-    map!(many1!(alt!(non_escape | escape)), |chars: Vec<char>| chars
-        .into_iter()
-        .collect::<Cow<str>>())
+    map!(
+        many1!(alt!(non_escape | escape)),
+        |chars: Vec<char>| chars.into_iter().collect::<Cow<str>>()
+    )
 );
 
-named!(non_escape(Input) -> char, none_of!("\\\"\0\n\r\t"));
+named!(non_escape(Input) -> char,
+    none_of!("\\\"\0\n\r\t")
+);
 
 named!(escape(Input) -> char,
-    do_parse!(
-        tag!("\\") >>
-        c: one_of!("\\\"0nrtb") >>
-        (c)
-    )
+    preceded!(tag!("\\"), one_of!("\\\"0nrtb"))
 );
 
 #[cfg(test)]
@@ -384,8 +374,8 @@ mod tests {
     }
 
     #[test]
-    fn test_chunk_intro() -> ParseResult<'static, ()> {
-        test_parser!(chunk_intro("@@ -1,7 +1,6 @@\n") -> (
+    fn test_chunk_header() -> ParseResult<'static, ()> {
+        test_parser!(chunk_header("@@ -1,7 +1,6 @@\n") -> (
             Range { start: 1, count: 7 },
             Range { start: 1, count: 6 },
         ));
