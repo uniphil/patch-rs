@@ -1,51 +1,52 @@
-//! patch-rs is a parser library for [Unified Format]
-//! (https://www.gnu.org/software/diffutils/manual/html_node/Unified-Format.html#Unified-Format)
-//! diffs.
+//! Parse and produce patch files (diffs) in the [Unified Format].
 //!
-//! GVR also honed down the spec a bit more:
-//! http://www.artima.com/weblogs/viewpost.jsp?thread=164293
+//! The format is not fully specified, but people like Guido van Rossum [have done the work][spec]
+//! to figure out the details.
+//!
+//! The parser attempts to be forgiving enough to be compatible with diffs produced by programs
+//! like git. It accomplishes this by ignoring the additional code context and information provided
+//! in the diff by those programs.
+//!
+//! ## Example
+//!
+//! ```
+//! # fn main() -> Result<(), patch::ParseError<'static>> {
+//! // Make sure you add the `patch` crate to the `[dependencies]` key of your Cargo.toml file.
+//! use patch::Patch;
+//!
+//! let sample = "\
+//! --- before.py
+//! +++ path/to/after.py
+//! @@ -1,4 +1,4 @@
+//! -bacon
+//! -eggs
+//! -ham
+//! +python
+//! +eggy
+//! +hamster
+//!  guido\n";
+//!
+//! let patch = Patch::from_single(sample)?;
+//! assert_eq!(&patch.old.path, "before.py");
+//! assert_eq!(&patch.new.path, "path/to/after.py");
+//!
+//! // Print out the parsed patch file in its Rust representation
+//! println!("{:#?}", patch);
+//!
+//! // Print out the parsed patch file in the Unified Format. For input that was originally in the
+//! // Unified Format, this will produce output identical to that original input.
+//! println!("{}", patch); // use format!("{}\n", patch) to get this as a String
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! [Unified Format]: https://www.gnu.org/software/diffutils/manual/html_node/Unified-Format.html
+//! [spec]: http://www.artima.com/weblogs/viewpost.jsp?thread=164293
 
-#[macro_use]
-extern crate nom;
-extern crate chrono;
-
-use std::error::Error;
-use nom::{IResult};
-
-pub use self::parser::{Patch, File, FileMetadata, Range, Hunk, Line};
-use self::parser::{patch};
+#![deny(unused_must_use)]
 
 mod parser;
+mod ast;
 
-#[derive(Debug)]
-pub enum PatchError {
-    ParseError,
-}
-
-impl std::fmt::Display for PatchError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match *self {
-            PatchError::ParseError =>
-                write!(f, "Error while parsing"),
-        }
-    }
-}
-
-impl Error for PatchError {
-    fn description(&self) -> &str {
-        match *self {
-            PatchError::ParseError =>
-                "parse error",
-        }
-    }
-}
-
-
-pub fn parse(diff: &str) -> Result<Patch, PatchError> {
-    match patch(diff.as_bytes()) {
-        IResult::Done(_, p) =>
-            Ok(p),
-        IResult::Incomplete(_) | IResult::Error(_) =>
-            Err(PatchError::ParseError),
-    }
-}
+pub use parser::ParseError;
+pub use ast::*;
