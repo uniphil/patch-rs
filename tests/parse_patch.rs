@@ -99,11 +99,11 @@ fn test_parse_other() -> Result<(), ParseError<'static>> {
     let patch = Patch::from_single(sample)?;
     assert_eq!(patch.old, File {
         path: "before.py".into(),
-        meta: Some(FileMetadata::Other("08f78e0addd5bf7b7aa8887e406493e75e8d2b55")),
+        meta: Some(FileMetadata::Other("08f78e0addd5bf7b7aa8887e406493e75e8d2b55".into())),
     });
     assert_eq!(patch.new, File {
         path: "after.py".into(),
-        meta: Some(FileMetadata::Other("e044048282ce75186ecc7a214fd3d9ba478a2816")),
+        meta: Some(FileMetadata::Other("e044048282ce75186ecc7a214fd3d9ba478a2816".into())),
     });
     assert_eq!(patch.end_newline, true);
 

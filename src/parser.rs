@@ -114,14 +114,14 @@ named!(headers(Input) -> (File, File),
 named!(header_line_content(Input) -> File,
     do_parse!(
         filename: filename >>
-        after: opt!(preceded!(space, map!(take_until!("\n"), input_to_str))) >>
+        after: opt!(preceded!(space, file_metadata)) >>
         (File {
             path: filename,
             meta: after.and_then(|after| match after {
-                "" => None,
+                Cow::Borrowed("") => None,
                 _ => Some(
-                    DateTime::parse_from_str(after, "%F %T%.f %z")
-                        .or_else(|_| DateTime::parse_from_str(after, "%F %T %z"))
+                    DateTime::parse_from_str(after.as_ref(), "%F %T%.f %z")
+                        .or_else(|_| DateTime::parse_from_str(after.as_ref(), "%F %T %z"))
                         .ok()
                         .map_or_else(|| FileMetadata::Other(after), FileMetadata::DateTime)
                 ),
@@ -195,32 +195,48 @@ named!(no_newline_indicator(Input) -> bool,
     )
 );
 
-// Filename parsing
 named!(filename(Input) -> Cow<str>,
     alt!(quoted | bare)
 );
 
+named!(file_metadata(Input) -> Cow<str>,
+    alt!(quoted | map!(take_until1!("\n"), |data| input_to_str(data).into()))
+);
+
 named!(quoted(Input) -> Cow<str>,
-    delimited!(tag!("\""), unescape, tag!("\""))
+    delimited!(tag!("\""), unescaped_str, tag!("\""))
 );
 
 named!(bare(Input) -> Cow<str>,
     map!(is_not!(" \t\r\n"), |data| input_to_str(data).into())
 );
 
-named!(unescape(Input) -> Cow<str>,
+named!(unescaped_str(Input) -> Cow<str>,
     map!(
-        many1!(alt!(non_escape | escape)),
+        many1!(alt!(unescaped_char | escaped_char)),
         |chars: Vec<char>| chars.into_iter().collect::<Cow<str>>()
     )
 );
 
-named!(non_escape(Input) -> char,
-    none_of!("\\\"\0\n\r\t")
+// Parses an unescaped character
+named!(unescaped_char(Input) -> char,
+    none_of!("\0\n\r\t\\\"")
 );
 
-named!(escape(Input) -> char,
-    preceded!(tag!("\\"), one_of!("\\\"0nrtb"))
+// Parses an escaped character and returns its unescaped equivalent
+named!(escaped_char(Input) -> char,
+    map!(
+        preceded!(char!('\\'), one_of!(r#"0nrt"\"#)),
+        |ch| match ch {
+            '0' => '\0',
+            'n' => '\n',
+            'r' => '\r',
+            't' => '\t',
+            '"' => '\"',
+            '\\' => '\\',
+            _ => unreachable!(),
+        }
+    )
 );
 
 #[cfg(test)]
@@ -246,7 +262,7 @@ mod tests {
 
     #[test]
     fn test_unescape() -> ParseResult<'static, ()> {
-        test_parser!(unescape("file \\\"name\\\"") -> "file \"name\"".to_string());
+        test_parser!(unescaped_str("file \\\"name\\\"") -> "file \"name\"".to_string());
         Ok(())
     }
 
@@ -266,11 +282,13 @@ mod tests {
 
     #[test]
     fn test_filename() -> ParseResult<'static, ()> {
+        // bare
         test_parser!(filename("asdf ") -> @(" ", "asdf".to_string()));
 
-        test_parser!(filename("\"asdf\" ") -> @(" ", "asdf".to_string()));
-
-        test_parser!(filename("\"a s\\\"df\" ") -> @(" ", "a s\"df".to_string()));
+        // quoted
+        test_parser!(filename(r#""a/My Project/src/foo.rs" "#) -> @(" ", "a/My Project/src/foo.rs".to_string()));
+        test_parser!(filename(r#""\"asdf\" fdsh \\\t\r" "#) -> @(" ", "\"asdf\" fdsh \\\t\r".to_string()));
+        test_parser!(filename(r#""a s\"\nd\0f" "#) -> @(" ", "a s\"\nd\0f".to_string()));
         Ok(())
     }
 
@@ -305,7 +323,7 @@ mod tests {
             "\n",
             File {
                 path: "lao".into(),
-                meta: Some(FileMetadata::Other("08f78e0addd5bf7b7aa8887e406493e75e8d2b55"))
+                meta: Some(FileMetadata::Other("08f78e0addd5bf7b7aa8887e406493e75e8d2b55".into()))
             },
         ));
         Ok(())
@@ -351,15 +369,11 @@ mod tests {
         test_parser!(headers(sample3) -> (
             File {
                 path: "lao".into(),
-                meta: Some(FileMetadata::Other(
-                    "08f78e0addd5bf7b7aa8887e406493e75e8d2b55"
-                )),
+                meta: Some(FileMetadata::Other("08f78e0addd5bf7b7aa8887e406493e75e8d2b55".into())),
             },
             File {
                 path: "tzu".into(),
-                meta: Some(FileMetadata::Other(
-                    "e044048282ce75186ecc7a214fd3d9ba478a2816"
-                )),
+                meta: Some(FileMetadata::Other("e044048282ce75186ecc7a214fd3d9ba478a2816".into())),
             },
         ));
         Ok(())

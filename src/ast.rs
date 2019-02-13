@@ -139,9 +139,15 @@ impl<'a> Patch<'a> {
 pub struct File<'a> {
     /// The parsed path or file name of the file
     ///
-    /// Avoids allocation if at all possible. Only allocates if the file path is an escaped string
-    /// literal. Character escapes are two characters each (e.g. '\\' + 'n'), so we need to
-    /// allocate a new string in order to unescape them.
+    /// Avoids allocation if at all possible. Only allocates if the file path is a quoted string
+    /// literal. String literals are necessary in some cases, for example if the file path has
+    /// spaces in it. These literals can contain escaped characters which are initially seen as
+    /// groups of two characters by the parser (e.g. '\\' + 'n'). A newly allocated string is
+    /// used to unescape those characters (e.g. "\\n" -> '\n').
+    ///
+    /// **Note:** While this string is typically a file path, this library makes no attempt to
+    /// verify the format of that path. That means that **this field can potentially be any
+    /// string**. You should verify it before doing anything that may be security-critical.
     pub path: Cow<'a, str>,
     /// Any additional information provided with the file path
     pub meta: Option<FileMetadata<'a>>,
@@ -163,7 +169,7 @@ pub enum FileMetadata<'a> {
     /// A complete datetime, e.g. `2002-02-21 23:30:39.942229878 -0800`
     DateTime(DateTime<FixedOffset>),
     /// Any other string provided after the file path, e.g. git hash, unrecognized timestamp, etc.
-    Other(&'a str),
+    Other(Cow<'a, str>),
 }
 
 impl<'a> fmt::Display for FileMetadata<'a> {
