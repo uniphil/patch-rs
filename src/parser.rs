@@ -42,7 +42,7 @@ impl<'a> From<nom::Err<Input<'a>>> for ParseError<'a> {
 
 impl<'a> std::fmt::Display for ParseError<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "Line {}:{}: Error while parsing: {}", self.line, self.offset, self.err)
+        write!(f, "Line {}: Error while parsing: {}", self.line, self.err)
     }
 }
 
