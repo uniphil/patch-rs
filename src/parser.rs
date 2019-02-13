@@ -72,7 +72,8 @@ pub(crate) fn parse_single_patch(s: &str) -> Result<Patch, ParseError> {
 pub(crate) fn parse_multiple_patches(s: &str) -> Result<Vec<Patch>, ParseError> {
     let (remaining_input, patches) = multiple_patches(str_to_input(s))?;
     // Parser should return an error instead of producing remaining input
-    assert!(remaining_input.fragment.is_empty(), "bug: failed to parse entire input");
+    assert!(remaining_input.fragment.is_empty(), "bug: failed to parse entire input. \
+        Remaining: '{}'", input_to_str(remaining_input));
     Ok(patches)
 }
 
@@ -89,6 +90,8 @@ named!(patch(Input) -> Patch,
         files: headers >>
         hunks: chunks >>
         no_newline_indicator: no_newline_indicator >>
+        // Ignore trailing empty lines produced by some diff programs
+        many0!(char!('\n')) >>
         ({
             let (old, new) = files;
             Patch {old, new, hunks, end_newline: !no_newline_indicator}
