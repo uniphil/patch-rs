@@ -205,7 +205,7 @@ named!(chunk_line(Input) -> Line,
 // Trailing newline indicator
 named!(no_newline_indicator(Input) -> bool,
     map!(
-        opt!(tag!("\\ No newline at end of file")),
+        opt!(terminated!(tag!("\\ No newline at end of file"), opt!(char!('\n')))),
         |matched| matched.is_some()
     )
 );

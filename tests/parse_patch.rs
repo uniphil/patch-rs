@@ -51,7 +51,7 @@ fn test_parse_no_newline_indicator() {
 +eggy
 +hamster
  guido
-\\ No newline at end of file";
+\\ No newline at end of file\n";
     match Patch::from_single(sample) {
         Ok(p) => {
             assert_eq!(
@@ -89,7 +89,8 @@ fn test_parse_timestamps() {
 +python
 +eggy
 +hamster
- guido\n";
+ guido
+\\ No newline at end of file";
     match Patch::from_single(sample) {
         Ok(p) => {
             assert_eq!(
