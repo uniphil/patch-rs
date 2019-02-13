@@ -147,6 +147,7 @@ pub struct Hunk<'a> {
     pub old_range: Range,
     /// The range of lines in the new file that this hunk represents
     pub new_range: Range,
+    /// Each line of text in the hunk, prefixed with the type of change it represents
     pub lines: Vec<Line<'a>>,
 }
 
@@ -166,6 +167,6 @@ pub enum Line<'a> {
     Add(&'a str),
     /// A line removed from the old file in the new file
     Remove(&'a str),
-    /// A line provided for context in the diff; from both the old and the new file
+    /// A line provided for context in the diff (unchanged); from both the old and the new file
     Context(&'a str),
 }
