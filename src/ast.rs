@@ -45,9 +45,7 @@ impl<'a> Patch<'a> {
     ///
     /// ```
     /// # fn main() -> Result<(), patch::ParseError<'static>> {
-    /// // Make sure you add the `patch` crate to the `[dependencies]` key of your Cargo.toml file.
-    /// use patch::Patch;
-    ///
+    /// # use patch::Patch;
     /// let sample = "\
     /// --- lao	2002-02-21 23:30:39.942229878 -0800
     /// +++ tzu	2002-02-21 23:30:50.442260588 -0800
@@ -67,11 +65,13 @@ impl<'a> Patch<'a> {
     ///  they have different names.
     /// +They both may be called deep and profound.
     /// +Deeper and more profound,
-    /// +The door of all subtleties!\n";
+    /// +The door of all subtleties!
+    /// \\ No newline at end of file\n";
     ///
     /// let patch = Patch::from_single(sample)?;
     /// assert_eq!(&patch.old.path, "lao");
     /// assert_eq!(&patch.new.path, "tzu");
+    /// assert_eq!(patch.end_newline, false);
     /// # Ok(())
     /// # }
     /// ```
@@ -86,9 +86,7 @@ impl<'a> Patch<'a> {
     ///
     /// ```
     /// # fn main() -> Result<(), patch::ParseError<'static>> {
-    /// // Make sure you add the `patch` crate to the `[dependencies]` key of your Cargo.toml file.
-    /// use patch::Patch;
-    ///
+    /// # use patch::Patch;
     /// let sample = "\
     /// diff --git a/src/generator/place_items.rs b/src/generator/place_items.rs
     /// index 508f4e9..31a167e 100644
@@ -142,8 +140,8 @@ pub struct File<'a> {
     /// The parsed path or file name of the file
     ///
     /// Avoids allocation if at all possible. Only allocates if the file path is an escaped string
-    /// literal. These two character escapes (e.g. '\' + 'n') require that we allocate a new string
-    /// in order to unescape them.
+    /// literal. Character escapes are two characters each (e.g. '\\' + 'n'), so we need to
+    /// allocate a new string in order to unescape them.
     pub path: Cow<'a, str>,
     /// Any additional information provided with the file path
     pub meta: Option<FileMetadata<'a>>,
@@ -162,7 +160,7 @@ impl<'a> fmt::Display for File<'a> {
 /// Additional metadata provided with the file path
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum FileMetadata<'a> {
-    /// A full datetime string, e.g. `2002-02-21 23:30:39.942229878 -0800`
+    /// A complete datetime, e.g. `2002-02-21 23:30:39.942229878 -0800`
     DateTime(DateTime<FixedOffset>),
     /// Any other string provided after the file path, e.g. git hash, unrecognized timestamp, etc.
     Other(&'a str),
@@ -207,7 +205,7 @@ impl<'a> fmt::Display for Hunk<'a> {
 pub struct Range {
     /// The start line of the chunk in the old or new file
     pub start: u64,
-    /// The chunk size in the old or new file
+    /// The chunk size (number of lines) in the old or new file
     pub count: u64,
 }
 
