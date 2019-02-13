@@ -353,14 +353,8 @@ mod tests {
 --- lao
 +++ tzu\n";
         test_parser!(headers(sample2) -> (
-            File {
-                path: "lao".into(),
-                meta: None,
-            },
-            File {
-                path: "tzu".into(),
-                meta: None,
-            },
+            File {path: "lao".into(), meta: None},
+            File {path: "tzu".into(), meta: None},
         ));
 
         let sample3 = "\
