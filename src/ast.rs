@@ -1,3 +1,4 @@
+use std::fmt;
 use std::borrow::Cow;
 
 use chrono::{DateTime, FixedOffset};
@@ -18,6 +19,23 @@ pub struct Patch<'a> {
     /// This will only be false if at the end of the patch we encounter the text:
     /// `\ No newline at end of file`
     pub end_newline: bool,
+}
+
+impl<'a> fmt::Display for Patch<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // Display implementations typically hold up the invariant that there is no trailing
+        // newline. This isn't enforced, but it allows them to work well with `println!`
+
+        write!(f, "--- {}", self.old)?;
+        write!(f, "\n+++ {}", self.new)?;
+        for hunk in &self.hunks {
+            write!(f, "\n{}", hunk)?;
+        }
+        if !self.end_newline {
+            write!(f, "\n\\ No newline at end of file")?;
+        }
+        Ok(())
+    }
 }
 
 impl<'a> Patch<'a> {
@@ -131,6 +149,16 @@ pub struct File<'a> {
     pub meta: Option<FileMetadata<'a>>,
 }
 
+impl<'a> fmt::Display for File<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.path)?;
+        if let Some(meta) = &self.meta {
+            write!(f, " {}", meta)?;
+        }
+        Ok(())
+    }
+}
+
 /// Additional metadata provided with the file path
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum FileMetadata<'a> {
@@ -138,6 +166,17 @@ pub enum FileMetadata<'a> {
     DateTime(DateTime<FixedOffset>),
     /// Any other string provided after the file path, e.g. git hash, unrecognized timestamp, etc.
     Other(&'a str),
+}
+
+impl<'a> fmt::Display for FileMetadata<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            FileMetadata::DateTime(datetime) => {
+                write!(f, "{}", datetime.format("%F %T%.f %z"))
+            },
+            FileMetadata::Other(data) => write!(f, "{}", data),
+        }
+    }
 }
 
 /// One area where the files differ
@@ -151,6 +190,18 @@ pub struct Hunk<'a> {
     pub lines: Vec<Line<'a>>,
 }
 
+impl<'a> fmt::Display for Hunk<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "@@ -{} +{} @@", self.old_range, self.new_range)?;
+
+        for line in &self.lines {
+            write!(f, "\n{}", line)?;
+        }
+
+        Ok(())
+    }
+}
+
 /// A range of lines in a given file
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Range {
@@ -158,6 +209,12 @@ pub struct Range {
     pub start: u64,
     /// The chunk size in the old or new file
     pub count: u64,
+}
+
+impl fmt::Display for Range {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{},{}", self.start, self.count)
+    }
 }
 
 /// A line of the old file, new file, or both
@@ -169,4 +226,14 @@ pub enum Line<'a> {
     Remove(&'a str),
     /// A line provided for context in the diff (unchanged); from both the old and the new file
     Context(&'a str),
+}
+
+impl<'a> fmt::Display for Line<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Line::Add(line) => write!(f, "+{}", line),
+            Line::Remove(line) => write!(f, "-{}", line),
+            Line::Context(line) => write!(f, " {}", line),
+        }
+    }
 }

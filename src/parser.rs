@@ -496,6 +496,9 @@ mod tests {
         };
 
         test_parser!(patch(sample) -> expected);
+
+        assert_eq!(format!("{}\n", expected), sample);
+
         Ok(())
     }
 }

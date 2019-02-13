@@ -30,14 +30,20 @@
 //! assert_eq!(&patch.old.path, "before.py");
 //! assert_eq!(&patch.new.path, "path/to/after.py");
 //!
-//! // Print out the parsed patch file
+//! // Print out the parsed patch file in its Rust representation
 //! println!("{:#?}", patch);
+//!
+//! // Print out the parsed patch file in the Unified Format. For input that was originally in the
+//! // Unified Format, this will produce output identical to that original input.
+//! println!("{}", patch); // use format!("{}\n", patch) to get this as a String
 //! # Ok(())
 //! # }
 //! ```
 //!
 //! [Unified Format]: https://www.gnu.org/software/diffutils/manual/html_node/Unified-Format.html
 //! [spec]: http://www.artima.com/weblogs/viewpost.jsp?thread=164293
+
+#![deny(unused_must_use)]
 
 mod parser;
 mod ast;
