@@ -80,11 +80,9 @@ named!(multiple_patches(Input) -> Vec<Patch>,
     many1!(patch)
 );
 
-named!(single_patch(Input) -> Patch, do_parse!(
-    p: patch >>
-    eof!() >>
-    (p)
-));
+named!(single_patch(Input) -> Patch,
+    terminated!(patch, eof!())
+);
 
 named!(patch(Input) -> Patch,
     do_parse!(
