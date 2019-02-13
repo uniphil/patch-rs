@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use chrono::{DateTime, FixedOffset};
 
 use crate::parser::{parse_single_patch, parse_multiple_patches, ParseError};
@@ -120,7 +122,11 @@ impl<'a> Patch<'a> {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct File<'a> {
     /// The parsed path or file name of the file
-    pub path: String,
+    ///
+    /// Avoids allocation if at all possible. Only allocates if the file path is an escaped string
+    /// literal. These two character escapes (e.g. '\' + 'n') require that we allocate a new string
+    /// in order to unescape them.
+    pub path: Cow<'a, str>,
     /// Any additional information provided with the file path
     pub meta: Option<FileMetadata<'a>>,
 }

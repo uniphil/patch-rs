@@ -18,14 +18,14 @@ fn test_parse() {
             assert_eq!(
                 p.old,
                 patch::File {
-                    path: "before.py".to_string(),
+                    path: "before.py".into(),
                     meta: None,
                 }
             );
             assert_eq!(
                 p.new,
                 patch::File {
-                    path: "after.py".to_string(),
+                    path: "after.py".into(),
                     meta: None,
                 }
             );
@@ -57,14 +57,14 @@ fn test_parse_no_newline_indicator() {
             assert_eq!(
                 p.old,
                 patch::File {
-                    path: "before.py".to_string(),
+                    path: "before.py".into(),
                     meta: None,
                 }
             );
             assert_eq!(
                 p.new,
                 patch::File {
-                    path: "after.py".to_string(),
+                    path: "after.py".into(),
                     meta: None,
                 }
             );
@@ -95,7 +95,7 @@ fn test_parse_timestamps() {
             assert_eq!(
                 p.old,
                 patch::File {
-                    path: "before.py".to_string(),
+                    path: "before.py".into(),
                     meta: Some(patch::FileMetadata::DateTime(
                         chrono::DateTime::parse_from_rfc3339("2002-02-21T23:30:39.942229878-08:00")
                             .unwrap()
@@ -105,7 +105,7 @@ fn test_parse_timestamps() {
             assert_eq!(
                 p.new,
                 patch::File {
-                    path: "after.py".to_string(),
+                    path: "after.py".into(),
                     meta: Some(patch::FileMetadata::DateTime(
                         chrono::DateTime::parse_from_rfc3339("2002-02-21T23:30:50-08:00").unwrap()
                     )),
@@ -138,7 +138,7 @@ fn test_parse_other() {
             assert_eq!(
                 p.old,
                 patch::File {
-                    path: "before.py".to_string(),
+                    path: "before.py".into(),
                     meta: Some(patch::FileMetadata::Other(
                         "08f78e0addd5bf7b7aa8887e406493e75e8d2b55"
                     )),
@@ -147,7 +147,7 @@ fn test_parse_other() {
             assert_eq!(
                 p.new,
                 patch::File {
-                    path: "after.py".to_string(),
+                    path: "after.py".into(),
                     meta: Some(patch::FileMetadata::Other(
                         "e044048282ce75186ecc7a214fd3d9ba478a2816"
                     )),

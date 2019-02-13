@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::borrow::Cow;
 
 use chrono::DateTime;
 use nom_locate::LocatedSpan;
@@ -210,18 +211,18 @@ named!(no_newline_indicator(Input) -> bool,
 );
 
 // Filename parsing
-named!(filename(Input) -> String, alt!(quoted | bare));
+named!(filename(Input) -> Cow<str>, alt!(quoted | bare));
 
-named!(quoted(Input) -> String, delimited!(tag!("\""), unescape, tag!("\"")));
+named!(quoted(Input) -> Cow<str>, delimited!(tag!("\""), unescape, tag!("\"")));
 
-named!(bare(Input) -> String,
-    map!(is_not!(" \t\r\n"), |data| input_to_str(data).to_string())
+named!(bare(Input) -> Cow<str>,
+    map!(is_not!(" \t\r\n"), |data| input_to_str(data).into())
 );
 
-named!(unescape(Input) -> String,
+named!(unescape(Input) -> Cow<str>,
     map!(many1!(alt!(non_escape | escape)), |chars: Vec<char>| chars
         .into_iter()
-        .collect::<String>())
+        .collect::<Cow<str>>())
 );
 
 named!(non_escape(Input) -> char, none_of!("\\\"\0\n\r\t"));
@@ -288,14 +289,14 @@ mod tests {
     #[test]
     fn test_header_line_contents() -> ParseResult<'static, ()> {
         test_parser!(header_line_content("lao\n") -> @("\n", File {
-            path: "lao".to_string(),
+            path: "lao".into(),
             meta: None,
         }));
 
         test_parser!(header_line_content("lao 2002-02-21 23:30:39.942229878 -0800\n") -> @(
             "\n",
             File {
-                path: "lao".to_string(),
+                path: "lao".into(),
                 meta: Some(FileMetadata::DateTime(
                     DateTime::parse_from_rfc3339("2002-02-21T23:30:39.942229878-08:00").unwrap()
                 )),
@@ -305,7 +306,7 @@ mod tests {
         test_parser!(header_line_content("lao 2002-02-21 23:30:39 -0800\n") -> @(
             "\n",
             File {
-                path: "lao".to_string(),
+                path: "lao".into(),
                 meta: Some(FileMetadata::DateTime(
                     DateTime::parse_from_rfc3339("2002-02-21T23:30:39-08:00").unwrap()
                 )),
@@ -315,7 +316,7 @@ mod tests {
         test_parser!(header_line_content("lao 08f78e0addd5bf7b7aa8887e406493e75e8d2b55\n") -> @(
             "\n",
             File {
-                path: "lao".to_string(),
+                path: "lao".into(),
                 meta: Some(FileMetadata::Other("08f78e0addd5bf7b7aa8887e406493e75e8d2b55"))
             },
         ));
@@ -329,13 +330,13 @@ mod tests {
 +++ tzu 2002-02-21 23:30:50.442260588 -0800\n";
         test_parser!(headers(sample) -> (
             File {
-                path: "lao".to_string(),
+                path: "lao".into(),
                 meta: Some(FileMetadata::DateTime(
                     DateTime::parse_from_rfc3339("2002-02-21T23:30:39.942229878-08:00").unwrap()
                 )),
             },
             File {
-                path: "tzu".to_string(),
+                path: "tzu".into(),
                 meta: Some(FileMetadata::DateTime(
                     DateTime::parse_from_rfc3339("2002-02-21T23:30:50.442260588-08:00").unwrap()
                 )),
@@ -347,11 +348,11 @@ mod tests {
 +++ tzu\n";
         test_parser!(headers(sample2) -> (
             File {
-                path: "lao".to_string(),
+                path: "lao".into(),
                 meta: None,
             },
             File {
-                path: "tzu".to_string(),
+                path: "tzu".into(),
                 meta: None,
             },
         ));
@@ -361,13 +362,13 @@ mod tests {
 +++ tzu e044048282ce75186ecc7a214fd3d9ba478a2816\n";
         test_parser!(headers(sample3) -> (
             File {
-                path: "lao".to_string(),
+                path: "lao".into(),
                 meta: Some(FileMetadata::Other(
                     "08f78e0addd5bf7b7aa8887e406493e75e8d2b55"
                 )),
             },
             File {
-                path: "tzu".to_string(),
+                path: "tzu".into(),
                 meta: Some(FileMetadata::Other(
                     "e044048282ce75186ecc7a214fd3d9ba478a2816"
                 )),
@@ -451,13 +452,13 @@ mod tests {
 
         let expected = Patch {
             old: File {
-                path: "lao".to_string(),
+                path: "lao".into(),
                 meta: Some(FileMetadata::DateTime(
                     DateTime::parse_from_rfc3339("2002-02-21T23:30:39.942229878-08:00").unwrap(),
                 )),
             },
             new: File {
-                path: "tzu".to_string(),
+                path: "tzu".into(),
                 meta: Some(FileMetadata::DateTime(
                     DateTime::parse_from_rfc3339("2002-02-21T23:30:50.442260588-08:00").unwrap(),
                 )),
