@@ -111,3 +111,32 @@ fn test_parse_other() -> Result<(), ParseError<'static>> {
 
     Ok(())
 }
+
+#[test]
+fn test_parse_escaped() -> Result<(), ParseError<'static>> {
+    let sample = "\
+--- before.py \"asdf \\\\ \\n \\t \\0 \\r \\\" \"
++++ \"My Work/after.py\" \"My project is cool! Wow!!; SELECT * FROM USERS;\"
+@@ -1,4 +1,4 @@
+-bacon
+-eggs
+-ham
++python
++eggy
++hamster
+ guido\n";
+    let patch = Patch::from_single(sample)?;
+    assert_eq!(patch.old, File {
+        path: "before.py".into(),
+        meta: Some(FileMetadata::Other("asdf \\ \n \t \0 \r \" ".into())),
+    });
+    assert_eq!(patch.new, File {
+        path: "My Work/after.py".into(),
+        meta: Some(FileMetadata::Other("My project is cool! Wow!!; SELECT * FROM USERS;".into())),
+    });
+    assert_eq!(patch.end_newline, true);
+
+    assert_eq!(format!("{}\n", patch), sample);
+
+    Ok(())
+}

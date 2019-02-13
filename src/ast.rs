@@ -134,6 +134,33 @@ impl<'a> Patch<'a> {
     }
 }
 
+/// Check if a string needs to be quoted, and format it accordingly
+fn maybe_escape_quote(f: &mut fmt::Formatter, s: &Cow<str>) -> fmt::Result {
+    let should_quote = |ch| match ch {
+        ' ' | '\t' | '\r' | '\n' | '\"' | '\0' | '\\' => true,
+        _ => false,
+    };
+
+    let quote = s.chars().any(should_quote);
+    if quote {
+        write!(f, "\"")?;
+        for ch in s.chars() {
+            match ch {
+                '\0' => write!(f, r"\0")?,
+                '\n' => write!(f, r"\n")?,
+                '\r' => write!(f, r"\r")?,
+                '\t' => write!(f, r"\t")?,
+                '"' => write!(f, r#"\""#)?,
+                '\\' => write!(f, r"\\")?,
+                _ => write!(f, "{}", ch)?,
+            }
+        }
+        write!(f, "\"")
+    } else {
+        write!(f, "{}", s)
+    }
+}
+
 /// The file path and any additional info of either the old file or the new file
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct File<'a> {
@@ -155,7 +182,7 @@ pub struct File<'a> {
 
 impl<'a> fmt::Display for File<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.path)?;
+        maybe_escape_quote(f, &self.path)?;
         if let Some(meta) = &self.meta {
             write!(f, " {}", meta)?;
         }
@@ -178,7 +205,8 @@ impl<'a> fmt::Display for FileMetadata<'a> {
             FileMetadata::DateTime(datetime) => {
                 write!(f, "{}", datetime.format("%F %T%.f %z"))
             },
-            FileMetadata::Other(data) => write!(f, "{}", data),
+            FileMetadata::Other(data) => maybe_escape_quote(f, data)
+,
         }
     }
 }

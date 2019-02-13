@@ -232,7 +232,7 @@ named!(escaped_char(Input) -> char,
             'n' => '\n',
             'r' => '\r',
             't' => '\t',
-            '"' => '\"',
+            '"' => '"',
             '\\' => '\\',
             _ => unreachable!(),
         }
