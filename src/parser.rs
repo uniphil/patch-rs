@@ -16,7 +16,7 @@ type Input<'a> = LocatedSpan<CompleteStr<'a>>;
 pub struct ParseError<'a> {
     /// The line where the parsing error occurred
     pub line: u32,
-    /// The offset on the line where the parsing error occurred
+    /// The offset within the input where the parsing error occurred
     pub offset: usize,
     /// The actual parsing error
     pub err: nom::Err<&'a str>,
