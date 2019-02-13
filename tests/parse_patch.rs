@@ -1,6 +1,8 @@
 use chrono::DateTime;
 use patch::{Patch, File, FileMetadata, ParseError};
 
+use pretty_assertions::assert_eq;
+
 #[test]
 fn test_parse() -> Result<(), ParseError<'static>> {
     let sample = "\
@@ -139,4 +141,75 @@ fn test_parse_escaped() -> Result<(), ParseError<'static>> {
     assert_eq!(format!("{}\n", patch), sample);
 
     Ok(())
+}
+
+#[test]
+fn test_parse_triple_plus_minus() -> Result<(), ParseError<'static>> {
+    // Our parser has some hacky rules to make sure that lines starting with +++ or --- aren't
+    // interpreted as regular addition/removal lines that could be part of a hunk. This test checks
+    // to make sure that code is working.
+    let sample = r#"--- main.c
++++ main.c
+@@ -1,4 +1,7 @@
++#include<stdio.h>
++
+ int main() {
+ double a;
+---a;
++++a;
++printf("%d\n", a);
+ }
+"#;
+    let patches = Patch::from_multiple(sample).unwrap();
+    assert_eq!(patches.len(), 1);
+
+    let patch = &patches[0];
+    assert_eq!(patch.old, File {path: "main.c".into(), meta: None});
+    assert_eq!(patch.new, File {path: "main.c".into(), meta: None});
+    assert_eq!(patch.end_newline, true);
+
+    assert_eq!(patch.hunks.len(), 1);
+    assert_eq!(patch.hunks[0].lines.len(), 8);
+
+    assert_eq!(format!("{}\n", patch), sample);
+
+    Ok(())
+}
+
+//FIXME: This test should NOT panic. When we have more sophisticated chunk line parsing that
+// actually takes the hunk ranges into account, the #[should_panic] annotation should be removed.
+// See the FIXME comment on top of the chunk_line parser.
+#[test]
+#[should_panic]
+fn test_parse_triple_plus_minus_hack() {
+    // Our parser has some hacky rules to make sure that lines starting with +++ or --- aren't
+    // interpreted as regular addition/removal lines that could be part of a hunk. This test
+    // demonstrates that these rules are not foolproof. The only differences between this test and
+    // test_parse_triple_plus_minus are `--- a` and `+++ a` vs `---a` and `+++a`. In either case,
+    // we should be able to determine that those lines do not start a new patch based on the ranges
+    // provided for the hunk.
+    let sample = r#"--- main.c
++++ main.c
+@@ -1,4 +1,7 @@
++#include<stdio.h>
++
+ int main() {
+ double a;
+--- a;
++++ a;
++printf("%d\n", a);
+ }
+"#;
+    let patches = Patch::from_multiple(sample).unwrap();
+    assert_eq!(patches.len(), 1);
+
+    let patch = &patches[0];
+    assert_eq!(patch.old, File {path: "main.c".into(), meta: None});
+    assert_eq!(patch.new, File {path: "main.c".into(), meta: None});
+    assert_eq!(patch.end_newline, true);
+
+    assert_eq!(patch.hunks.len(), 1);
+    assert_eq!(patch.hunks[0].lines.len(), 8);
+
+    assert_eq!(format!("{}\n", patch), sample);
 }

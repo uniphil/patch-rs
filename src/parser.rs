@@ -176,12 +176,40 @@ named!(u64_digit(Input) -> u64,
     map_res!(digit, |input| input_to_str(input).parse())
 );
 
+// Looks for lines starting with + or - or space, but not +++ or ---. Not a foolproof check.
+//
+// For example, if someone deletes a line that was using the pre-decrement (--) operator or adds a
+// line that was using the pre-increment (++) operator, this will fail.
+//
+// Example where this doesn't work:
+//
+// --- main.c
+// +++ main.c
+// @@ -1,4 +1,7 @@
+// +#include<stdio.h>
+// +
+//  int main() {
+//  double a;
+// --- a;
+// +++ a;
+// +printf("%d\n", a);
+//  }
+//
+// We will fail to parse this entire diff.
+//
+// By checking for `+++ ` instead of just `+++`, we add at least a little more robustness because
+// we know that people typically write `++a`, not `++ a`. That being said, this is still not enough
+// to guarantee correctness in all cases.
+//
+//FIXME: Use the ranges in the chunk header to figure out how many chunk lines to parse. Will need
+// to figure out how to count in nom more robustly than many1!(). Maybe using switch!()?
+//FIXME: The test_parse_triple_plus_minus_hack test will no longer panic when this is fixed.
 named!(chunk_line(Input) -> Line,
     alt!(
-        preceded!(tag!("+"), take_until_and_consume!("\n")) => {
+        preceded!(tuple!(tag!("+"), not!(tag!("++ "))), take_until_and_consume!("\n")) => {
             |line| Line::Add(input_to_str(line))
         } |
-        preceded!(tag!("-"), take_until_and_consume!("\n")) => {
+        preceded!(tuple!(tag!("-"), not!(tag!("-- "))), take_until_and_consume!("\n")) => {
             |line| Line::Remove(input_to_str(line))
         } |
         preceded!(tag!(" "), take_until_and_consume!("\n")) => {
