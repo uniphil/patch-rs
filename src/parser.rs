@@ -156,27 +156,29 @@ fn chunk(input: Input<'_>) -> IResult<Input<'_>, Hunk> {
     let (input, ranges) = chunk_header(input)?;
     let (input, lines) = many1(chunk_line)(input)?;
 
-    let (old_range, new_range) = ranges;
+    let (old_range, new_range, range_hint) = ranges;
     Ok((
         input,
         Hunk {
             old_range,
             new_range,
+            range_hint,
             lines,
         },
     ))
 }
 
-fn chunk_header(input: Input<'_>) -> IResult<Input<'_>, (Range, Range)> {
+fn chunk_header(input: Input<'_>) -> IResult<Input<'_>, (Range, Range, &'_ str)> {
     let (input, _) = tag("@@ -")(input)?;
     let (input, old_range) = range(input)?;
     let (input, _) = tag(" +")(input)?;
     let (input, new_range) = range(input)?;
     let (input, _) = tag(" @@")(input)?;
-    // Ignore any additional context provied after @@ (git sometimes adds this)
-    let (input, _) = take_until("\n")(input)?;
+
+    // Save hint provided after @@ (git sometimes adds this)
+    let (input, range_hint) = take_until("\n")(input)?;
     let (input, _) = newline(input)?;
-    Ok((input, (old_range, new_range)))
+    Ok((input, (old_range, new_range, &range_hint)))
 }
 
 fn range(input: Input<'_>) -> IResult<Input<'_>, Range> {
@@ -435,9 +437,10 @@ mod tests {
 
     #[test]
     fn test_chunk_header() -> ParseResult<'static, ()> {
-        test_parser!(chunk_header("@@ -1,7 +1,6 @@\n") -> (
+        test_parser!(chunk_header("@@ -1,7 +1,6 @@ foo bar\n") -> (
             Range { start: 1, count: 7 },
             Range { start: 1, count: 6 },
+            " foo bar",
         ));
         Ok(())
     }
@@ -458,6 +461,7 @@ mod tests {
         let expected = Hunk {
             old_range: Range { start: 1, count: 7 },
             new_range: Range { start: 1, count: 6 },
+            range_hint: "",
             lines: vec![
                 Line::Remove("The Way that can be told of is not the eternal Way;"),
                 Line::Remove("The name that can be named is not the eternal name."),
@@ -515,6 +519,7 @@ mod tests {
                 Hunk {
                     old_range: Range { start: 1, count: 7 },
                     new_range: Range { start: 1, count: 6 },
+                    range_hint: "",
                     lines: vec![
                         Line::Remove("The Way that can be told of is not the eternal Way;"),
                         Line::Remove("The name that can be named is not the eternal name."),
@@ -530,6 +535,7 @@ mod tests {
                 Hunk {
                     old_range: Range { start: 9, count: 3 },
                     new_range: Range { start: 8, count: 6 },
+                    range_hint: "",
                     lines: vec![
                         Line::Context("The two are the same,"),
                         Line::Context("But after they are produced,"),
