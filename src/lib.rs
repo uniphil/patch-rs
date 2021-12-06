@@ -45,8 +45,8 @@
 
 #![deny(unused_must_use)]
 
-mod parser;
 mod ast;
+mod parser;
 
-pub use parser::ParseError;
 pub use ast::*;
+pub use parser::ParseError;
