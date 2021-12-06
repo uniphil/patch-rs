@@ -1,23 +1,20 @@
-use std::error::Error;
 use std::borrow::Cow;
+use std::error::Error;
 
 use chrono::DateTime;
-use nom_locate::LocatedSpan;
 use nom::*;
-
 use nom::{
     branch::alt,
+    bytes::complete::{is_not, tag, take_till, take_until},
+    character::complete::{char, digit1, newline, none_of, one_of, space0},
+    combinator::{map, not, opt},
     multi::{many0, many1},
-    combinator::{not, opt, map},
-    sequence::{tuple, preceded, delimited, terminated},
-    bytes::complete::{tag, take_till, take_until, is_not},
-    character::complete::{char, space0, digit1, newline, none_of, one_of},
+    sequence::{delimited, preceded, terminated, tuple},
 };
-
 
 use crate::ast::*;
 
-type Input<'a> = LocatedSpan<&'a str>;
+type Input<'a> = nom_locate::LocatedSpan<&'a str>;
 
 /// Type returned when an error occurs while parsing a patch
 #[derive(Debug, Clone)]
@@ -33,15 +30,16 @@ pub struct ParseError<'a> {
 }
 
 #[doc(hidden)]
-impl<'a> From<nom::Err<(Input<'a>, nom::error::ErrorKind)>> for ParseError<'a> {
-    fn from(err: nom::Err<(Input<'a>, nom::error::ErrorKind)>) -> Self {
+impl<'a> From<nom::Err<nom::error::Error<Input<'a>>>> for ParseError<'a> {
+    fn from(err: nom::Err<nom::error::Error<Input<'a>>>) -> Self {
         match err {
             nom::Err::Incomplete(_) => unreachable!("bug: parser should not return incomplete"),
             // Unify both error types because at this point the error is not recoverable
-            nom::Err::Error((input, kind)) |
-            nom::Err::Failure((input, kind)) => {
-                let LocatedSpan {line, offset, fragment, extra: _extra } = input;
-                Self {line, offset, fragment, kind}
+            nom::Err::Error(error) | nom::Err::Failure(error) => Self {
+                line: error.input.location_line(),
+                offset: error.input.location_offset(),
+                fragment: error.input.fragment(),
+                kind: error.code,
             },
         }
     }
@@ -49,7 +47,11 @@ impl<'a> From<nom::Err<(Input<'a>, nom::error::ErrorKind)>> for ParseError<'a> {
 
 impl<'a> std::fmt::Display for ParseError<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "Line {}: Error while parsing: {}", self.line, self.fragment)
+        write!(
+            f,
+            "Line {}: Error while parsing: {}",
+            self.line, self.fragment
+        )
     }
 }
 
@@ -59,40 +61,40 @@ impl<'a> Error for ParseError<'a> {
     }
 }
 
-fn input_to_str(input: Input) -> &str {
-    input.fragment
-}
-
-fn str_to_input(s: &str) -> Input {
-    LocatedSpan::new(s)
-}
-
-fn consume_line(input: Input) -> IResult<Input, &str> {
+fn consume_line(input: Input<'_>) -> IResult<Input<'_>, &str> {
     let (input, raw) = terminated(take_till(|c| c == '\n'), newline)(input)?;
-    Ok((input, input_to_str(raw)))
+    Ok((input, raw.fragment()))
 }
 
-pub(crate) fn parse_single_patch(s: &str) -> Result<Patch, ParseError> {
-    let (remaining_input, patch) = patch(str_to_input(s))?;
+pub(crate) fn parse_single_patch(s: &str) -> Result<Patch, ParseError<'_>> {
+    let (remaining_input, patch) = patch(Input::new(s))?;
     // Parser should return an error instead of producing remaining input
-    assert!(remaining_input.fragment.is_empty(), "bug: failed to parse entire input. \
-        Remaining: '{}'", input_to_str(remaining_input));
+    assert!(
+        remaining_input.fragment().is_empty(),
+        "bug: failed to parse entire input. \
+        Remaining: '{}'",
+        remaining_input.fragment()
+    );
     Ok(patch)
 }
 
-pub(crate) fn parse_multiple_patches(s: &str) -> Result<Vec<Patch>, ParseError> {
-    let (remaining_input, patches) = multiple_patches(str_to_input(s))?;
+pub(crate) fn parse_multiple_patches(s: &str) -> Result<Vec<Patch>, ParseError<'_>> {
+    let (remaining_input, patches) = multiple_patches(Input::new(s))?;
     // Parser should return an error instead of producing remaining input
-    assert!(remaining_input.fragment.is_empty(), "bug: failed to parse entire input. \
-        Remaining: '{}'", input_to_str(remaining_input));
+    assert!(
+        remaining_input.fragment().is_empty(),
+        "bug: failed to parse entire input. \
+        Remaining: '{}'",
+        remaining_input.fragment()
+    );
     Ok(patches)
 }
 
-fn multiple_patches(input: Input) -> IResult<Input, Vec<Patch>> {
+fn multiple_patches(input: Input<'_>) -> IResult<Input<'_>, Vec<Patch>> {
     many1(patch)(input)
 }
 
-fn patch(input: Input) -> IResult<Input, Patch> {
+fn patch(input: Input<'_>) -> IResult<Input<'_>, Patch> {
     let (input, files) = headers(input)?;
     let (input, hunks) = chunks(input)?;
     let (input, no_newline_indicator) = no_newline_indicator(input)?;
@@ -100,11 +102,19 @@ fn patch(input: Input) -> IResult<Input, Patch> {
     let (input, _) = many0(newline)(input)?;
 
     let (old, new) = files;
-    Ok((input, Patch {old, new, hunks, end_newline: !no_newline_indicator}))
+    Ok((
+        input,
+        Patch {
+            old,
+            new,
+            hunks,
+            end_newline: !no_newline_indicator,
+        },
+    ))
 }
 
 // Header lines
-fn headers(input: Input) -> IResult<Input, (File, File)> {
+fn headers(input: Input<'_>) -> IResult<Input<'_>, (File, File)> {
     // Ignore any preamble lines in produced diffs
     let (input, _) = take_until("---")(input)?;
     let (input, _) = tag("--- ")(input)?;
@@ -116,38 +126,48 @@ fn headers(input: Input) -> IResult<Input, (File, File)> {
     Ok((input, (oldfile, newfile)))
 }
 
-fn header_line_content(input: Input) -> IResult<Input, File> {
+fn header_line_content(input: Input<'_>) -> IResult<Input<'_>, File> {
     let (input, filename) = filename(input)?;
     let (input, after) = opt(preceded(space0, file_metadata))(input)?;
 
-    Ok((input, File {
-        path: filename,
-        meta: after.and_then(|after| match after {
-            Cow::Borrowed("") => None,
-            _ => Some(
-                DateTime::parse_from_str(after.as_ref(), "%F %T%.f %z")
-                .or_else(|_| DateTime::parse_from_str(after.as_ref(), "%F %T %z"))
-                .ok()
-                .map_or_else(|| FileMetadata::Other(after), FileMetadata::DateTime)
-            ),
-        }),
-    }))
+    Ok((
+        input,
+        File {
+            path: filename,
+            meta: after.and_then(|after| match after {
+                Cow::Borrowed("") => None,
+                _ => Some(
+                    DateTime::parse_from_str(after.as_ref(), "%F %T%.f %z")
+                        .or_else(|_| DateTime::parse_from_str(after.as_ref(), "%F %T %z"))
+                        .ok()
+                        .map_or_else(|| FileMetadata::Other(after), FileMetadata::DateTime),
+                ),
+            }),
+        },
+    ))
 }
 
 // Hunks of the file differences
-fn chunks(input: Input) -> IResult<Input, Vec<Hunk>> {
+fn chunks(input: Input<'_>) -> IResult<Input<'_>, Vec<Hunk>> {
     many1(chunk)(input)
 }
 
-fn chunk(input: Input) -> IResult<Input, Hunk> {
+fn chunk(input: Input<'_>) -> IResult<Input<'_>, Hunk> {
     let (input, ranges) = chunk_header(input)?;
     let (input, lines) = many1(chunk_line)(input)?;
 
     let (old_range, new_range) = ranges;
-    Ok((input,  Hunk{old_range, new_range, lines}))
+    Ok((
+        input,
+        Hunk {
+            old_range,
+            new_range,
+            lines,
+        },
+    ))
 }
 
-fn chunk_header(input: Input) -> IResult<Input, (Range, Range)> {
+fn chunk_header(input: Input<'_>) -> IResult<Input<'_>, (Range, Range)> {
     let (input, _) = tag("@@ -")(input)?;
     let (input, old_range) = range(input)?;
     let (input, _) = tag(" +")(input)?;
@@ -158,16 +178,16 @@ fn chunk_header(input: Input) -> IResult<Input, (Range, Range)> {
     Ok((input, (old_range, new_range)))
 }
 
-fn range(input: Input) -> IResult<Input, Range> {
+fn range(input: Input<'_>) -> IResult<Input<'_>, Range> {
     let (input, start) = u64_digit(input)?;
     let (input, count) = opt(preceded(tag(","), u64_digit))(input)?;
     let count = count.unwrap_or(1);
     Ok((input, Range { start, count }))
 }
 
-fn u64_digit(input: Input) -> IResult<Input, u64> {
+fn u64_digit(input: Input<'_>) -> IResult<Input<'_>, u64> {
     let (input, digits) = digit1(input)?;
-    let num = digits.fragment.parse::<u64>().unwrap();
+    let num = digits.fragment().parse::<u64>().unwrap();
     Ok((input, num))
 }
 
@@ -199,59 +219,75 @@ fn u64_digit(input: Input) -> IResult<Input, u64> {
 //FIXME: Use the ranges in the chunk header to figure out how many chunk lines to parse. Will need
 // to figure out how to count in nom more robustly than many1!(). Maybe using switch!()?
 //FIXME: The test_parse_triple_plus_minus_hack test will no longer panic when this is fixed.
-fn chunk_line(input: Input) -> IResult<Input, Line> {
-   alt((
-    map(preceded(tuple((tag("+"), not(tag("++ ")))), consume_line), Line::Add),
-    map(preceded(tuple((tag("-"), not(tag("-- ")))), consume_line), Line::Remove),
-    map(preceded(tag(" "), consume_line), Line::Context),
-   ))(input)
+fn chunk_line(input: Input<'_>) -> IResult<Input<'_>, Line> {
+    alt((
+        map(
+            preceded(tuple((tag("+"), not(tag("++ ")))), consume_line),
+            Line::Add,
+        ),
+        map(
+            preceded(tuple((tag("-"), not(tag("-- ")))), consume_line),
+            Line::Remove,
+        ),
+        map(preceded(tag(" "), consume_line), Line::Context),
+    ))(input)
 }
 
 // Trailing newline indicator
-fn no_newline_indicator(input: Input) -> IResult<Input, bool> {
-    map(opt(terminated(tag("\\ No newline at end of file"), opt(newline))), |matched| matched.is_some())(input)
+fn no_newline_indicator(input: Input<'_>) -> IResult<Input<'_>, bool> {
+    map(
+        opt(terminated(
+            tag("\\ No newline at end of file"),
+            opt(newline),
+        )),
+        |matched| matched.is_some(),
+    )(input)
 }
 
-fn filename(input: Input) -> IResult<Input, Cow<str>> {
+fn filename(input: Input<'_>) -> IResult<Input<'_>, Cow<str>> {
     alt((quoted, bare))(input)
 }
 
-fn file_metadata(input: Input) -> IResult<Input, Cow<str>> {
-    alt((quoted, map(take_till(|c| c == '\n'), |data: Input| input_to_str(data).into())))(input)
+fn file_metadata(input: Input<'_>) -> IResult<Input<'_>, Cow<str>> {
+    alt((
+        quoted,
+        map(take_till(|c| c == '\n'), |data: Input<'_>| {
+            Cow::Borrowed(*data.fragment())
+        }),
+    ))(input)
 }
 
-fn quoted(input: Input) -> IResult<Input, Cow<str>> {
+fn quoted(input: Input<'_>) -> IResult<Input<'_>, Cow<str>> {
     delimited(tag("\""), unescaped_str, tag("\""))(input)
 }
 
-fn bare(input: Input) -> IResult<Input, Cow<str>> {
-    map(is_not(" \t\r\n"), |data| input_to_str(data).into())(input)
+fn bare(input: Input<'_>) -> IResult<Input<'_>, Cow<str>> {
+    map(is_not(" \t\r\n"), |data: Input<'_>| {
+        Cow::Borrowed(*data.fragment())
+    })(input)
 }
 
-fn unescaped_str(input: Input) -> IResult<Input, Cow<str>> {
+fn unescaped_str(input: Input<'_>) -> IResult<Input<'_>, Cow<str>> {
     let (input, raw) = many1(alt((unescaped_char, escaped_char)))(input)?;
     Ok((input, raw.into_iter().collect::<Cow<str>>()))
 }
 
 // Parses an unescaped character
-fn unescaped_char(input: Input) -> IResult<Input, char> {
+fn unescaped_char(input: Input<'_>) -> IResult<Input<'_>, char> {
     none_of("\0\n\r\t\\\"")(input)
 }
 
 // Parses an escaped character and returns its unescaped equivalent
-fn escaped_char(input: Input) -> IResult<Input, char> {
-    map(
-        preceded(char('\\'), one_of(r#"0nrt"\"#)),
-        |ch| match ch {
-            '0' => '\0',
-            'n' => '\n',
-            'r' => '\r',
-            't' => '\t',
-            '"' => '"',
-            '\\' => '\\',
-            _ => unreachable!(),
-        }
-    )(input)
+fn escaped_char(input: Input<'_>) -> IResult<Input<'_>, char> {
+    map(preceded(char('\\'), one_of(r#"0nrt"\"#)), |ch| match ch {
+        '0' => '\0',
+        'n' => '\n',
+        'r' => '\r',
+        't' => '\t',
+        '"' => '"',
+        '\\' => '\\',
+        _ => unreachable!(),
+    })(input)
 }
 
 #[cfg(test)]
@@ -260,13 +296,13 @@ mod tests {
 
     use pretty_assertions::assert_eq;
 
-    type ParseResult<'a, T> = Result<T, nom::Err<(Input<'a>, nom::error::ErrorKind)>>;
+    type ParseResult<'a, T> = Result<T, nom::Err<nom::error::Error<Input<'a>>>>;
 
     // Using a macro instead of a function so that error messages cite the most helpful line number
     macro_rules! test_parser {
         ($parser:ident($input:expr) -> @($expected_remaining_input:expr, $expected:expr $(,)*)) => {
-            let (remaining_input, result) = $parser(str_to_input($input))?;
-            assert_eq!(input_to_str(remaining_input), $expected_remaining_input,
+            let (remaining_input, result) = $parser(Input::new($input))?;
+            assert_eq!(*remaining_input.fragment(), $expected_remaining_input,
                 "unexpected remaining input after parse");
             assert_eq!(result, $expected);
         };
