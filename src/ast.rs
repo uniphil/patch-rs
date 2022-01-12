@@ -136,7 +136,9 @@ impl<'a> Patch<'a> {
 
 /// Check if a string needs to be quoted, and format it accordingly
 fn maybe_escape_quote(f: &mut fmt::Formatter, s: &str) -> fmt::Result {
-    let quote = s.chars().any(|ch| matches!(ch, ' ' | '\t' | '\r' | '\n' | '\"' | '\0' | '\\'));
+    let quote = s
+        .chars()
+        .any(|ch| matches!(ch, ' ' | '\t' | '\r' | '\n' | '\"' | '\0' | '\\'));
 
     if quote {
         write!(f, "\"")?;
