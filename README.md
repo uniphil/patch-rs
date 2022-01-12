@@ -1,6 +1,6 @@
 # Patch
 
-[![Build Status](https://travis-ci.org/uniphil/patch-rs.svg?branch=master)](https://travis-ci.org/uniphil/patch-rs)
+[![Checks](https://github.com/uniphil/patch-rs/actions/workflows/checks.yml/badge.svg)](https://github.com/uniphil/patch-rs/actions/workflows/checks.yml)
 [![Crates.io Badge](https://img.shields.io/crates/v/patch.svg)](https://crates.io/crates/patch)
 [![docs.rs](https://docs.rs/patch/badge.svg)](https://docs.rs/patch)
 [![Lines of Code](https://tokei.rs/b1/github/uniphil/patch-rs)](https://github.com/uniphil/patch-rs)
