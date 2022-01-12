@@ -1,9 +1,9 @@
-use std::fmt;
 use std::borrow::Cow;
+use std::fmt;
 
 use chrono::{DateTime, FixedOffset};
 
-use crate::parser::{parse_single_patch, parse_multiple_patches, ParseError};
+use crate::parser::{parse_multiple_patches, parse_single_patch, ParseError};
 
 /// A complete patch summarizing the differences between two files
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -135,13 +135,9 @@ impl<'a> Patch<'a> {
 }
 
 /// Check if a string needs to be quoted, and format it accordingly
-fn maybe_escape_quote(f: &mut fmt::Formatter, s: &Cow<str>) -> fmt::Result {
-    let should_quote = |ch| match ch {
-        ' ' | '\t' | '\r' | '\n' | '\"' | '\0' | '\\' => true,
-        _ => false,
-    };
+fn maybe_escape_quote(f: &mut fmt::Formatter, s: &str) -> fmt::Result {
+    let quote = s.chars().any(|ch| matches!(ch, ' ' | '\t' | '\r' | '\n' | '\"' | '\0' | '\\'));
 
-    let quote = s.chars().any(should_quote);
     if quote {
         write!(f, "\"")?;
         for ch in s.chars() {
@@ -204,9 +200,8 @@ impl<'a> fmt::Display for FileMetadata<'a> {
         match self {
             FileMetadata::DateTime(datetime) => {
                 write!(f, "{}", datetime.format("%F %T%.f %z"))
-            },
-            FileMetadata::Other(data) => maybe_escape_quote(f, data)
-,
+            }
+            FileMetadata::Other(data) => maybe_escape_quote(f, data),
         }
     }
 }

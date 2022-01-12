@@ -1,5 +1,5 @@
 use chrono::DateTime;
-use patch::{Patch, File, FileMetadata, ParseError};
+use patch::{File, FileMetadata, ParseError, Patch};
 
 use pretty_assertions::assert_eq;
 
@@ -17,8 +17,20 @@ fn test_parse() -> Result<(), ParseError<'static>> {
 +hamster
  guido\n";
     let patch = Patch::from_single(sample)?;
-    assert_eq!(patch.old, File {path: "before.py".into(), meta: None});
-    assert_eq!(patch.new, File {path: "after.py".into(), meta: None});
+    assert_eq!(
+        patch.old,
+        File {
+            path: "before.py".into(),
+            meta: None
+        }
+    );
+    assert_eq!(
+        patch.new,
+        File {
+            path: "after.py".into(),
+            meta: None
+        }
+    );
     assert_eq!(patch.end_newline, true);
 
     assert_eq!(format!("{}\n", patch), sample);
@@ -41,8 +53,20 @@ fn test_parse_no_newline_indicator() -> Result<(), ParseError<'static>> {
  guido
 \\ No newline at end of file\n";
     let patch = Patch::from_single(sample)?;
-    assert_eq!(patch.old, File {path: "before.py".into(), meta: None});
-    assert_eq!(patch.new, File {path: "after.py".into(), meta: None});
+    assert_eq!(
+        patch.old,
+        File {
+            path: "before.py".into(),
+            meta: None
+        }
+    );
+    assert_eq!(
+        patch.new,
+        File {
+            path: "after.py".into(),
+            meta: None
+        }
+    );
     assert_eq!(patch.end_newline, false);
 
     assert_eq!(format!("{}\n", patch), sample);
@@ -65,18 +89,24 @@ fn test_parse_timestamps() -> Result<(), ParseError<'static>> {
  guido
 \\ No newline at end of file";
     let patch = Patch::from_single(sample)?;
-    assert_eq!(patch.old, File {
-        path: "before.py".into(),
-        meta: Some(FileMetadata::DateTime(
-            DateTime::parse_from_rfc3339("2002-02-21T23:30:39.942229878-08:00").unwrap()
-        )),
-    });
-    assert_eq!(patch.new, File {
-        path: "after.py".into(),
-        meta: Some(FileMetadata::DateTime(
-            DateTime::parse_from_rfc3339("2002-02-21T23:30:50-08:00").unwrap()
-        )),
-    });
+    assert_eq!(
+        patch.old,
+        File {
+            path: "before.py".into(),
+            meta: Some(FileMetadata::DateTime(
+                DateTime::parse_from_rfc3339("2002-02-21T23:30:39.942229878-08:00").unwrap()
+            )),
+        }
+    );
+    assert_eq!(
+        patch.new,
+        File {
+            path: "after.py".into(),
+            meta: Some(FileMetadata::DateTime(
+                DateTime::parse_from_rfc3339("2002-02-21T23:30:50-08:00").unwrap()
+            )),
+        }
+    );
     assert_eq!(patch.end_newline, false);
 
     // to_string() uses Display but adds no trailing newline
@@ -99,14 +129,24 @@ fn test_parse_other() -> Result<(), ParseError<'static>> {
 +hamster
  guido\n";
     let patch = Patch::from_single(sample)?;
-    assert_eq!(patch.old, File {
-        path: "before.py".into(),
-        meta: Some(FileMetadata::Other("08f78e0addd5bf7b7aa8887e406493e75e8d2b55".into())),
-    });
-    assert_eq!(patch.new, File {
-        path: "after.py".into(),
-        meta: Some(FileMetadata::Other("e044048282ce75186ecc7a214fd3d9ba478a2816".into())),
-    });
+    assert_eq!(
+        patch.old,
+        File {
+            path: "before.py".into(),
+            meta: Some(FileMetadata::Other(
+                "08f78e0addd5bf7b7aa8887e406493e75e8d2b55".into()
+            )),
+        }
+    );
+    assert_eq!(
+        patch.new,
+        File {
+            path: "after.py".into(),
+            meta: Some(FileMetadata::Other(
+                "e044048282ce75186ecc7a214fd3d9ba478a2816".into()
+            )),
+        }
+    );
     assert_eq!(patch.end_newline, true);
 
     assert_eq!(format!("{}\n", patch), sample);
@@ -128,14 +168,22 @@ fn test_parse_escaped() -> Result<(), ParseError<'static>> {
 +hamster
  guido\n";
     let patch = Patch::from_single(sample)?;
-    assert_eq!(patch.old, File {
-        path: "before.py".into(),
-        meta: Some(FileMetadata::Other("asdf \\ \n \t \0 \r \" ".into())),
-    });
-    assert_eq!(patch.new, File {
-        path: "My Work/after.py".into(),
-        meta: Some(FileMetadata::Other("My project is cool! Wow!!; SELECT * FROM USERS;".into())),
-    });
+    assert_eq!(
+        patch.old,
+        File {
+            path: "before.py".into(),
+            meta: Some(FileMetadata::Other("asdf \\ \n \t \0 \r \" ".into())),
+        }
+    );
+    assert_eq!(
+        patch.new,
+        File {
+            path: "My Work/after.py".into(),
+            meta: Some(FileMetadata::Other(
+                "My project is cool! Wow!!; SELECT * FROM USERS;".into()
+            )),
+        }
+    );
     assert_eq!(patch.end_newline, true);
 
     assert_eq!(format!("{}\n", patch), sample);
@@ -164,8 +212,20 @@ fn test_parse_triple_plus_minus() -> Result<(), ParseError<'static>> {
     assert_eq!(patches.len(), 1);
 
     let patch = &patches[0];
-    assert_eq!(patch.old, File {path: "main.c".into(), meta: None});
-    assert_eq!(patch.new, File {path: "main.c".into(), meta: None});
+    assert_eq!(
+        patch.old,
+        File {
+            path: "main.c".into(),
+            meta: None
+        }
+    );
+    assert_eq!(
+        patch.new,
+        File {
+            path: "main.c".into(),
+            meta: None
+        }
+    );
     assert_eq!(patch.end_newline, true);
 
     assert_eq!(patch.hunks.len(), 1);
@@ -204,8 +264,20 @@ fn test_parse_triple_plus_minus_hack() {
     assert_eq!(patches.len(), 1);
 
     let patch = &patches[0];
-    assert_eq!(patch.old, File {path: "main.c".into(), meta: None});
-    assert_eq!(patch.new, File {path: "main.c".into(), meta: None});
+    assert_eq!(
+        patch.old,
+        File {
+            path: "main.c".into(),
+            meta: None
+        }
+    );
+    assert_eq!(
+        patch.new,
+        File {
+            path: "main.c".into(),
+            meta: None
+        }
+    );
     assert_eq!(patch.end_newline, true);
 
     assert_eq!(patch.hunks.len(), 1);
