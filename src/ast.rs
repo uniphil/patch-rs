@@ -39,6 +39,7 @@ impl<'a> fmt::Display for Patch<'a> {
 }
 
 impl<'a> Patch<'a> {
+    #[allow(clippy::tabs_in_doc_comments)]
     /// Attempt to parse a patch from the given string.
     ///
     /// # Example

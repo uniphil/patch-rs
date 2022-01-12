@@ -31,7 +31,7 @@ fn test_parse() -> Result<(), ParseError<'static>> {
             meta: None
         }
     );
-    assert_eq!(patch.end_newline, true);
+    assert!(patch.end_newline);
 
     assert_eq!(format!("{}\n", patch), sample);
 
@@ -67,7 +67,7 @@ fn test_parse_no_newline_indicator() -> Result<(), ParseError<'static>> {
             meta: None
         }
     );
-    assert_eq!(patch.end_newline, false);
+    assert!(!patch.end_newline);
 
     assert_eq!(format!("{}\n", patch), sample);
 
@@ -107,7 +107,7 @@ fn test_parse_timestamps() -> Result<(), ParseError<'static>> {
             )),
         }
     );
-    assert_eq!(patch.end_newline, false);
+    assert!(!patch.end_newline);
 
     // to_string() uses Display but adds no trailing newline
     assert_eq!(patch.to_string(), sample);
@@ -147,7 +147,7 @@ fn test_parse_other() -> Result<(), ParseError<'static>> {
             )),
         }
     );
-    assert_eq!(patch.end_newline, true);
+    assert!(patch.end_newline);
 
     assert_eq!(format!("{}\n", patch), sample);
 
@@ -184,7 +184,7 @@ fn test_parse_escaped() -> Result<(), ParseError<'static>> {
             )),
         }
     );
-    assert_eq!(patch.end_newline, true);
+    assert!(patch.end_newline);
 
     assert_eq!(format!("{}\n", patch), sample);
 
@@ -226,7 +226,7 @@ fn test_parse_triple_plus_minus() -> Result<(), ParseError<'static>> {
             meta: None
         }
     );
-    assert_eq!(patch.end_newline, true);
+    assert!(patch.end_newline);
 
     assert_eq!(patch.hunks.len(), 1);
     assert_eq!(patch.hunks[0].lines.len(), 8);
@@ -278,7 +278,7 @@ fn test_parse_triple_plus_minus_hack() {
             meta: None
         }
     );
-    assert_eq!(patch.end_newline, true);
+    assert!(patch.end_newline);
 
     assert_eq!(patch.hunks.len(), 1);
     assert_eq!(patch.hunks[0].lines.len(), 8);
