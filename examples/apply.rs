@@ -22,7 +22,7 @@ fn apply(diff: Patch, old: &str) -> String {
     out.join("\n")
 }
 
-static LAO: &'static str = "\
+static LAO: &str = "\
 The Way that can be told of is not the eternal Way;
 The name that can be named is not the eternal name.
 The Nameless is the origin of Heaven and Earth;
@@ -36,7 +36,7 @@ But after they are produced,
   they have different names.
 ";
 
-static RAW_DIFF: &'static str = "\
+static RAW_DIFF: &str = "\
 --- lao 2002-02-21 23:30:39.942229878 -0800
 +++ tzu 2002-02-21 23:30:50.442260588 -0800
 @@ -1,7 +1,6 @@

@@ -39,6 +39,7 @@ impl<'a> fmt::Display for Patch<'a> {
 }
 
 impl<'a> Patch<'a> {
+    #[allow(clippy::tabs_in_doc_comments)]
     /// Attempt to parse a patch from the given string.
     ///
     /// # Example
@@ -136,7 +137,9 @@ impl<'a> Patch<'a> {
 
 /// Check if a string needs to be quoted, and format it accordingly
 fn maybe_escape_quote(f: &mut fmt::Formatter, s: &str) -> fmt::Result {
-    let quote = s.chars().any(|ch| matches!(ch, ' ' | '\t' | '\r' | '\n' | '\"' | '\0' | '\\'));
+    let quote = s
+        .chars()
+        .any(|ch| matches!(ch, ' ' | '\t' | '\r' | '\n' | '\"' | '\0' | '\\'));
 
     if quote {
         write!(f, "\"")?;
