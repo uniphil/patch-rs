@@ -1,5 +1,5 @@
 use chrono::DateTime;
-use patch::{File, FileMetadata, ParseError, Patch};
+use patch::{File, FileMetadata, Line, ParseError, Patch};
 
 use pretty_assertions::assert_eq;
 
@@ -284,4 +284,41 @@ fn test_parse_triple_plus_minus_hack() {
     assert_eq!(patch.hunks[0].lines.len(), 8);
 
     assert_eq!(format!("{}\n", patch), sample);
+}
+
+#[test]
+fn test_parse_hunk_header_context() {
+    let patch = "\
+preceding text
+blah blah
+--- old.txt
++++ new.txt
+@@ -1,7 +1,7 @@ spoopadoop
+ 0
+ 1
+ 2
+-3
++spaghetti
+ 4
+ 5
+ 6
+";
+    let patches = Patch::from_multiple(patch).unwrap();
+    assert_eq!(patches.len(), 1);
+
+    let patch = &patches[0];
+    assert_eq!(patch.hunks.len(), 1);
+    assert_eq!(patch.old.path, "old.txt");
+    assert_eq!(patch.new.path, "new.txt");
+
+    let hunk = &patch.hunks[0];
+    assert_eq!(hunk.lines.len(), 8);
+    assert_eq!(hunk.lines[0], Line::Context("0"));
+    assert_eq!(hunk.lines[1], Line::Context("1"));
+    assert_eq!(hunk.lines[2], Line::Context("2"));
+    assert_eq!(hunk.lines[3], Line::Remove("3"));
+    assert_eq!(hunk.lines[4], Line::Add("spaghetti"));
+    assert_eq!(hunk.lines[5], Line::Context("4"));
+    assert_eq!(hunk.lines[6], Line::Context("5"));
+    assert_eq!(hunk.lines[7], Line::Context("6"));
 }

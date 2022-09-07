@@ -174,7 +174,8 @@ fn chunk_header(input: Input<'_>) -> IResult<Input<'_>, (Range, Range)> {
     let (input, new_range) = range(input)?;
     let (input, _) = tag(" @@")(input)?;
     // Ignore any additional context provied after @@ (git sometimes adds this)
-    let (input, _) = many0(newline)(input)?;
+    let (input, _) = take_till(|c| c == '\n')(input)?;
+    let (input, _) = newline(input)?;
     Ok((input, (old_range, new_range)))
 }
 
