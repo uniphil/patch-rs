@@ -222,17 +222,25 @@ pub struct Hunk<'a> {
     pub lines: Vec<Line<'a>>,
 }
 
-impl<'a> Hunk<'_> {
+impl<'a> Hunk<'a> {
     /// A nicer way to access the optional hint
     pub fn hint(&self) -> Option<&str> {
         let h = self.range_hint.trim_start();
-        if h.len() > 0 { Some(h) } else { None }
+        if h.is_empty() {
+            None
+        } else {
+            Some(h)
+        }
     }
 }
 
 impl<'a> fmt::Display for Hunk<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "@@ -{} +{} @@{}", self.old_range, self.new_range, self.range_hint)?;
+        write!(
+            f,
+            "@@ -{} +{} @@{}",
+            self.old_range, self.new_range, self.range_hint
+        )?;
 
         for line in &self.lines {
             write!(f, "\n{}", line)?;
