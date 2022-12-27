@@ -5,8 +5,8 @@ use chrono::DateTime;
 use nom::*;
 use nom::{
     branch::alt,
-    bytes::complete::{is_not, tag, take_till, take_until},
-    character::complete::{char, digit1, newline, none_of, one_of, space0},
+    bytes::complete::{is_not, tag, take_until},
+    character::complete::{char, digit1, line_ending, none_of, not_line_ending, one_of, space0},
     combinator::{map, not, opt},
     multi::{many0, many1},
     sequence::{delimited, preceded, terminated, tuple},
@@ -61,8 +61,8 @@ impl<'a> Error for ParseError<'a> {
     }
 }
 
-fn consume_line(input: Input<'_>) -> IResult<Input<'_>, &str> {
-    let (input, raw) = terminated(take_till(|c| c == '\n'), newline)(input)?;
+fn consume_content_line(input: Input<'_>) -> IResult<Input<'_>, &str> {
+    let (input, raw) = terminated(not_line_ending, line_ending)(input)?;
     Ok((input, raw.fragment()))
 }
 
@@ -99,7 +99,7 @@ fn patch(input: Input<'_>) -> IResult<Input<'_>, Patch> {
     let (input, hunks) = chunks(input)?;
     let (input, no_newline_indicator) = no_newline_indicator(input)?;
     // Ignore trailing empty lines produced by some diff programs
-    let (input, _) = many0(newline)(input)?;
+    let (input, _) = many0(line_ending)(input)?;
 
     let (old, new) = files;
     Ok((
@@ -119,10 +119,10 @@ fn headers(input: Input<'_>) -> IResult<Input<'_>, (File, File)> {
     let (input, _) = take_until("---")(input)?;
     let (input, _) = tag("--- ")(input)?;
     let (input, oldfile) = header_line_content(input)?;
-    let (input, _) = newline(input)?;
+    let (input, _) = line_ending(input)?;
     let (input, _) = tag("+++ ")(input)?;
     let (input, newfile) = header_line_content(input)?;
-    let (input, _) = newline(input)?;
+    let (input, _) = line_ending(input)?;
     Ok((input, (oldfile, newfile)))
 }
 
@@ -176,14 +176,14 @@ fn chunk_header(input: Input<'_>) -> IResult<Input<'_>, (Range, Range, &'_ str)>
     let (input, _) = tag(" @@")(input)?;
 
     // Save hint provided after @@ (git sometimes adds this)
-    let (input, range_hint) = take_until("\n")(input)?;
-    let (input, _) = newline(input)?;
+    let (input, range_hint) = not_line_ending(input)?;
+    let (input, _) = line_ending(input)?;
     Ok((input, (old_range, new_range, &range_hint)))
 }
 
 fn range(input: Input<'_>) -> IResult<Input<'_>, Range> {
     let (input, start) = u64_digit(input)?;
-    let (input, count) = opt(preceded(tag(","), u64_digit))(input)?;
+    let (input, count) = opt(preceded(char(','), u64_digit))(input)?;
     let count = count.unwrap_or(1);
     Ok((input, Range { start, count }))
 }
@@ -225,14 +225,14 @@ fn u64_digit(input: Input<'_>) -> IResult<Input<'_>, u64> {
 fn chunk_line(input: Input<'_>) -> IResult<Input<'_>, Line> {
     alt((
         map(
-            preceded(tuple((tag("+"), not(tag("++ ")))), consume_line),
+            preceded(tuple((char('+'), not(tag("++ ")))), consume_content_line),
             Line::Add,
         ),
         map(
-            preceded(tuple((tag("-"), not(tag("-- ")))), consume_line),
+            preceded(tuple((char('-'), not(tag("-- ")))), consume_content_line),
             Line::Remove,
         ),
-        map(preceded(tag(" "), consume_line), Line::Context),
+        map(preceded(char(' '), consume_content_line), Line::Context),
     ))(input)
 }
 
@@ -241,7 +241,7 @@ fn no_newline_indicator(input: Input<'_>) -> IResult<Input<'_>, bool> {
     map(
         opt(terminated(
             tag("\\ No newline at end of file"),
-            opt(newline),
+            opt(line_ending),
         )),
         |matched| matched.is_some(),
     )(input)
@@ -254,14 +254,14 @@ fn filename(input: Input<'_>) -> IResult<Input<'_>, Cow<str>> {
 fn file_metadata(input: Input<'_>) -> IResult<Input<'_>, Cow<str>> {
     alt((
         quoted,
-        map(take_till(|c| c == '\n'), |data: Input<'_>| {
+        map(not_line_ending, |data: Input<'_>| {
             Cow::Borrowed(*data.fragment())
         }),
     ))(input)
 }
 
 fn quoted(input: Input<'_>) -> IResult<Input<'_>, Cow<str>> {
-    delimited(tag("\""), unescaped_str, tag("\""))(input)
+    delimited(char('\"'), unescaped_str, char('\"'))(input)
 }
 
 fn bare(input: Input<'_>) -> IResult<Input<'_>, Cow<str>> {
@@ -422,6 +422,28 @@ mod tests {
             File {
                 path: "tzu".into(),
                 meta: Some(FileMetadata::Other("e044048282ce75186ecc7a214fd3d9ba478a2816".into())),
+            },
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn test_headers_crlf() -> ParseResult<'static, ()> {
+        let sample = "\
+--- lao 2002-02-21 23:30:39.942229878 -0800\r
++++ tzu 2002-02-21 23:30:50.442260588 -0800\r\n";
+        test_parser!(headers(sample) -> (
+            File {
+                path: "lao".into(),
+                meta: Some(FileMetadata::DateTime(
+                    DateTime::parse_from_rfc3339("2002-02-21T23:30:39.942229878-08:00").unwrap()
+                )),
+            },
+            File {
+                path: "tzu".into(),
+                meta: Some(FileMetadata::DateTime(
+                    DateTime::parse_from_rfc3339("2002-02-21T23:30:50.442260588-08:00").unwrap()
+                )),
             },
         ));
         Ok(())

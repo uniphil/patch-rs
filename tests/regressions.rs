@@ -14,3 +14,16 @@ fn hunk_header_context_is_not_a_line_15() -> Result<(), ParseError<'static>> {
     assert_eq!(patch.hunks[0].lines, [Line::Context("x")]);
     Ok(())
 }
+
+#[test]
+fn crlf_breaks_stuff_17() -> Result<(), ParseError<'static>> {
+    let sample = "\
+--- old.txt\r
++++ new.txt\r
+@@ -0,0 +0,0 @@ spoopadoop\r
+ x\r
+";
+    let patch = Patch::from_single(sample)?;
+    assert_eq!(patch.hunks[0].lines, [Line::Context("x")]);
+    Ok(())
+}
