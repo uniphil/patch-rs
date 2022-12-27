@@ -20,7 +20,7 @@ fn crlf_breaks_stuff_17() -> Result<(), ParseError<'static>> {
     let sample = "\
 --- old.txt\r
 +++ new.txt\r
-@@ -0,0 +0,0 @@
+@@ -0,0 +0,0 @@\r
  x\r
 ";
     let patch = Patch::from_single(sample)?;
