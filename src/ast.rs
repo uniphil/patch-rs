@@ -216,13 +216,31 @@ pub struct Hunk<'a> {
     pub old_range: Range,
     /// The range of lines in the new file that this hunk represents
     pub new_range: Range,
+    /// Any trailing text after the hunk's range information
+    pub range_hint: &'a str,
     /// Each line of text in the hunk, prefixed with the type of change it represents
     pub lines: Vec<Line<'a>>,
 }
 
+impl<'a> Hunk<'a> {
+    /// A nicer way to access the optional hint
+    pub fn hint(&self) -> Option<&str> {
+        let h = self.range_hint.trim_start();
+        if h.is_empty() {
+            None
+        } else {
+            Some(h)
+        }
+    }
+}
+
 impl<'a> fmt::Display for Hunk<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "@@ -{} +{} @@", self.old_range, self.new_range)?;
+        write!(
+            f,
+            "@@ -{} +{} @@{}",
+            self.old_range, self.new_range, self.range_hint
+        )?;
 
         for line in &self.lines {
             write!(f, "\n{}", line)?;
@@ -264,6 +282,35 @@ impl<'a> fmt::Display for Line<'a> {
             Line::Add(line) => write!(f, "+{}", line),
             Line::Remove(line) => write!(f, "-{}", line),
             Line::Context(line) => write!(f, " {}", line),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_hint_helper() {
+        let mut h = Hunk {
+            old_range: Range { start: 0, count: 0 },
+            new_range: Range { start: 0, count: 0 },
+            range_hint: "",
+            lines: vec![],
+        };
+        for (input, expected) in vec![
+            ("", None),
+            (" ", None),
+            ("  ", None),
+            ("x", Some("x")),
+            (" x", Some("x")),
+            ("x ", Some("x ")),
+            (" x ", Some("x ")),
+            ("  abc def ", Some("abc def ")),
+        ] {
+            h.range_hint = input;
+            assert_eq!(h.hint(), expected);
         }
     }
 }
