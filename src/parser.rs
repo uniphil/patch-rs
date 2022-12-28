@@ -6,7 +6,7 @@ use nom::*;
 use nom::{
     branch::alt,
     bytes::complete::{is_not, tag, take_until},
-    character::complete::{char, digit1, line_ending, none_of, not_line_ending, one_of, space0},
+    character::complete::{char, digit1, line_ending, none_of, not_line_ending, one_of},
     combinator::{map, not, opt},
     multi::{many0, many1},
     sequence::{delimited, preceded, terminated, tuple},
@@ -128,7 +128,7 @@ fn headers(input: Input<'_>) -> IResult<Input<'_>, (File, File)> {
 
 fn header_line_content(input: Input<'_>) -> IResult<Input<'_>, File> {
     let (input, filename) = filename(input)?;
-    let (input, after) = opt(preceded(space0, file_metadata))(input)?;
+    let (input, after) = opt(preceded(char('\t'), file_metadata))(input)?;
 
     Ok((
         input,
@@ -136,6 +136,7 @@ fn header_line_content(input: Input<'_>) -> IResult<Input<'_>, File> {
             path: filename,
             meta: after.and_then(|after| match after {
                 Cow::Borrowed("") => None,
+                Cow::Borrowed("\t") => None,
                 _ => Some(
                     DateTime::parse_from_str(after.as_ref(), "%F %T%.f %z")
                         .or_else(|_| DateTime::parse_from_str(after.as_ref(), "%F %T %z"))
@@ -265,7 +266,7 @@ fn quoted(input: Input<'_>) -> IResult<Input<'_>, Cow<str>> {
 }
 
 fn bare(input: Input<'_>) -> IResult<Input<'_>, Cow<str>> {
-    map(is_not(" \t\r\n"), |data: Input<'_>| {
+    map(is_not("\t\r\n"), |data: Input<'_>| {
         Cow::Borrowed(*data.fragment())
     })(input)
 }
@@ -328,8 +329,8 @@ mod tests {
 
     #[test]
     fn test_bare() -> ParseResult<'static, ()> {
-        test_parser!(bare("file-name ") -> @(" ", "file-name".to_string()));
-
+        test_parser!(bare("file-name ") -> @("", "file-name ".to_string()));
+        test_parser!(bare("file-name\t") -> @("\t", "file-name".to_string()));
         test_parser!(bare("file-name\n") -> @("\n", "file-name".to_string()));
         Ok(())
     }
@@ -337,7 +338,7 @@ mod tests {
     #[test]
     fn test_filename() -> ParseResult<'static, ()> {
         // bare
-        test_parser!(filename("asdf ") -> @(" ", "asdf".to_string()));
+        test_parser!(filename("asdf\t") -> @("\t", "asdf".to_string()));
 
         // quoted
         test_parser!(filename(r#""a/My Project/src/foo.rs" "#) -> @(" ", "a/My Project/src/foo.rs".to_string()));
@@ -353,7 +354,7 @@ mod tests {
             meta: None,
         }));
 
-        test_parser!(header_line_content("lao 2002-02-21 23:30:39.942229878 -0800\n") -> @(
+        test_parser!(header_line_content("lao\t2002-02-21 23:30:39.942229878 -0800\n") -> @(
             "\n",
             File {
                 path: "lao".into(),
@@ -363,7 +364,7 @@ mod tests {
             },
         ));
 
-        test_parser!(header_line_content("lao 2002-02-21 23:30:39 -0800\n") -> @(
+        test_parser!(header_line_content("lao\t2002-02-21 23:30:39 -0800\n") -> @(
             "\n",
             File {
                 path: "lao".into(),
@@ -373,7 +374,7 @@ mod tests {
             },
         ));
 
-        test_parser!(header_line_content("lao 08f78e0addd5bf7b7aa8887e406493e75e8d2b55\n") -> @(
+        test_parser!(header_line_content("lao\t08f78e0addd5bf7b7aa8887e406493e75e8d2b55\n") -> @(
             "\n",
             File {
                 path: "lao".into(),
@@ -386,8 +387,8 @@ mod tests {
     #[test]
     fn test_headers() -> ParseResult<'static, ()> {
         let sample = "\
---- lao 2002-02-21 23:30:39.942229878 -0800
-+++ tzu 2002-02-21 23:30:50.442260588 -0800\n";
+--- lao	2002-02-21 23:30:39.942229878 -0800
++++ tzu	2002-02-21 23:30:50.442260588 -0800\n";
         test_parser!(headers(sample) -> (
             File {
                 path: "lao".into(),
@@ -411,9 +412,17 @@ mod tests {
             File {path: "tzu".into(), meta: None},
         ));
 
+        let sample2b = "\
+--- lao	
++++ tzu	\n";
+        test_parser!(headers(sample2b) -> (
+            File {path: "lao".into(), meta: None},
+            File {path: "tzu".into(), meta: None},
+        ));
+
         let sample3 = "\
---- lao 08f78e0addd5bf7b7aa8887e406493e75e8d2b55
-+++ tzu e044048282ce75186ecc7a214fd3d9ba478a2816\n";
+--- lao	08f78e0addd5bf7b7aa8887e406493e75e8d2b55
++++ tzu	e044048282ce75186ecc7a214fd3d9ba478a2816\n";
         test_parser!(headers(sample3) -> (
             File {
                 path: "lao".into(),
@@ -430,8 +439,8 @@ mod tests {
     #[test]
     fn test_headers_crlf() -> ParseResult<'static, ()> {
         let sample = "\
---- lao 2002-02-21 23:30:39.942229878 -0800\r
-+++ tzu 2002-02-21 23:30:50.442260588 -0800\r\n";
+--- lao	2002-02-21 23:30:39.942229878 -0800\r
++++ tzu	2002-02-21 23:30:50.442260588 -0800\r\n";
         test_parser!(headers(sample) -> (
             File {
                 path: "lao".into(),
@@ -504,8 +513,8 @@ mod tests {
     fn test_patch() -> ParseResult<'static, ()> {
         // https://www.gnu.org/software/diffutils/manual/html_node/Example-Unified.html
         let sample = "\
---- lao 2002-02-21 23:30:39.942229878 -0800
-+++ tzu 2002-02-21 23:30:50.442260588 -0800
+--- lao	2002-02-21 23:30:39.942229878 -0800
++++ tzu	2002-02-21 23:30:50.442260588 -0800
 @@ -1,7 +1,6 @@
 -The Way that can be told of is not the eternal Way;
 -The name that can be named is not the eternal name.

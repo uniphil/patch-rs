@@ -1,4 +1,4 @@
-use patch::{File, Hunk, Line, ParseError, Patch, Range};
+use patch::{File, FileMetadata, Hunk, Line, ParseError, Patch, Range};
 
 use pretty_assertions::assert_eq;
 
@@ -42,6 +42,32 @@ fn crlf_breaks_stuff_17() -> Result<(), ParseError<'static>> {
                 lines: vec![Line::Context("x")],
             }],
             end_newline: true,
+        }
+    );
+    Ok(())
+}
+
+#[test]
+fn unquoted_filenames_with_spaces_11() -> Result<(), ParseError<'static>> {
+    let sample = "\
+--- unquoted no space\t
++++ unquoted no space\twith metadata
+@@ -0,0 +0,0 @@
+ x
+";
+    let patch = Patch::from_single(sample)?;
+    assert_eq!(
+        patch.old,
+        File {
+            path: "unquoted no space".into(),
+            meta: None,
+        }
+    );
+    assert_eq!(
+        patch.new,
+        File {
+            path: "unquoted no space".into(),
+            meta: Some(FileMetadata::Other("with metadata".into())),
         }
     );
     Ok(())
