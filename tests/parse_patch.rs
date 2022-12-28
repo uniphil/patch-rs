@@ -77,8 +77,8 @@ fn test_parse_no_newline_indicator() -> Result<(), ParseError<'static>> {
 #[test]
 fn test_parse_timestamps() -> Result<(), ParseError<'static>> {
     let sample = "\
---- before.py 2002-02-21 23:30:39.942229878 -0800
-+++ after.py 2002-02-21 23:30:50 -0800
+--- before.py\t2002-02-21 23:30:39.942229878 -0800
++++ after.py\t2002-02-21 23:30:50 -0800
 @@ -1,4 +1,4 @@
 -bacon
 -eggs
@@ -118,8 +118,8 @@ fn test_parse_timestamps() -> Result<(), ParseError<'static>> {
 #[test]
 fn test_parse_other() -> Result<(), ParseError<'static>> {
     let sample = "\
---- before.py 08f78e0addd5bf7b7aa8887e406493e75e8d2b55
-+++ after.py e044048282ce75186ecc7a214fd3d9ba478a2816
+--- before.py\t08f78e0addd5bf7b7aa8887e406493e75e8d2b55
++++ after.py\te044048282ce75186ecc7a214fd3d9ba478a2816
 @@ -1,4 +1,4 @@
 -bacon
 -eggs
@@ -157,8 +157,8 @@ fn test_parse_other() -> Result<(), ParseError<'static>> {
 #[test]
 fn test_parse_escaped() -> Result<(), ParseError<'static>> {
     let sample = "\
---- before.py \"asdf \\\\ \\n \\t \\0 \\r \\\" \"
-+++ \"My Work/after.py\" \"My project is cool! Wow!!; SELECT * FROM USERS;\"
+--- before.py\t\"asdf \\\\ \\n \\t \\0 \\r \\\" \"
++++ \"My Work/after.py\"\t\"My project is cool! Wow!!; SELECT * FROM USERS;\"
 @@ -1,4 +1,4 @@
 -bacon
 -eggs

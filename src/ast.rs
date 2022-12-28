@@ -183,7 +183,7 @@ impl<'a> fmt::Display for File<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         maybe_escape_quote(f, &self.path)?;
         if let Some(meta) = &self.meta {
-            write!(f, " {}", meta)?;
+            write!(f, "\t{}", meta)?;
         }
         Ok(())
     }
