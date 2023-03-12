@@ -1,20 +1,21 @@
 //! Demonstrates how to apply a parsed diff to a file
 
 use patch::{Line, Patch};
+use std::borrow::Cow;
 
-fn apply(diff: Patch, old: &str) -> String {
+fn apply(diff: Patch<Cow<str>>, old: &str) -> String {
     let old_lines = old.lines().collect::<Vec<&str>>();
     let mut out: Vec<&str> = vec![];
     let mut old_line = 0;
-    for hunk in diff.hunks {
+    for hunk in &diff.hunks {
         while old_line < hunk.old_range.start - 1 {
             out.push(old_lines[old_line as usize]);
             old_line += 1;
         }
         old_line += hunk.old_range.count;
-        for line in hunk.lines {
+        for line in &hunk.lines {
             match line {
-                Line::Add(s) | Line::Context(s) => out.push(s),
+                Line::Add(s) | Line::Context(s) => out.push(s.as_ref()),
                 Line::Remove(_) => {}
             }
         }
