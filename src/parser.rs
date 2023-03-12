@@ -66,7 +66,7 @@ fn consume_content_line(input: Input<'_>) -> IResult<Input<'_>, &str> {
     Ok((input, raw.fragment()))
 }
 
-pub(crate) fn parse_single_patch(s: &str) -> Result<Patch, ParseError<'_>> {
+pub(crate) fn parse_single_patch(s: &str) -> Result<Patch<Cow<'_, str>>, ParseError<'_>> {
     let (remaining_input, patch) = patch(Input::new(s))?;
     // Parser should return an error instead of producing remaining input
     assert!(
@@ -78,7 +78,7 @@ pub(crate) fn parse_single_patch(s: &str) -> Result<Patch, ParseError<'_>> {
     Ok(patch)
 }
 
-pub(crate) fn parse_multiple_patches(s: &str) -> Result<Vec<Patch>, ParseError<'_>> {
+pub(crate) fn parse_multiple_patches(s: &str) -> Result<Vec<Patch<Cow<'_, str>>>, ParseError<'_>> {
     let (remaining_input, patches) = multiple_patches(Input::new(s))?;
     // Parser should return an error instead of producing remaining input
     assert!(
@@ -90,11 +90,11 @@ pub(crate) fn parse_multiple_patches(s: &str) -> Result<Vec<Patch>, ParseError<'
     Ok(patches)
 }
 
-fn multiple_patches(input: Input<'_>) -> IResult<Input<'_>, Vec<Patch>> {
+fn multiple_patches(input: Input<'_>) -> IResult<Input<'_>, Vec<Patch<Cow<'_, str>>>> {
     many1(patch)(input)
 }
 
-fn patch(input: Input<'_>) -> IResult<Input<'_>, Patch> {
+fn patch(input: Input<'_>) -> IResult<Input<'_>, Patch<Cow<'_, str>>> {
     let (input, files) = headers(input)?;
     let (input, hunks) = chunks(input)?;
     let (input, no_newline_indicator) = no_newline_indicator(input)?;
@@ -114,7 +114,7 @@ fn patch(input: Input<'_>) -> IResult<Input<'_>, Patch> {
 }
 
 // Header lines
-fn headers(input: Input<'_>) -> IResult<Input<'_>, (File, File)> {
+fn headers(input: Input<'_>) -> IResult<Input<'_>, (File<Cow<'_, str>>, File<Cow<'_, str>>)> {
     // Ignore any preamble lines in produced diffs
     let (input, _) = take_until("---")(input)?;
     let (input, _) = tag("--- ")(input)?;
@@ -126,7 +126,7 @@ fn headers(input: Input<'_>) -> IResult<Input<'_>, (File, File)> {
     Ok((input, (oldfile, newfile)))
 }
 
-fn header_line_content(input: Input<'_>) -> IResult<Input<'_>, File> {
+fn header_line_content(input: Input<'_>) -> IResult<Input<'_>, File<Cow<'_, str>>> {
     let (input, filename) = filename(input)?;
     let (input, after) = opt(preceded(char('\t'), file_metadata))(input)?;
 
@@ -149,11 +149,11 @@ fn header_line_content(input: Input<'_>) -> IResult<Input<'_>, File> {
 }
 
 // Hunks of the file differences
-fn chunks(input: Input<'_>) -> IResult<Input<'_>, Vec<Hunk>> {
+fn chunks(input: Input<'_>) -> IResult<Input<'_>, Vec<Hunk<Cow<'_, str>>>> {
     many1(chunk)(input)
 }
 
-fn chunk(input: Input<'_>) -> IResult<Input<'_>, Hunk> {
+fn chunk(input: Input<'_>) -> IResult<Input<'_>, Hunk<Cow<'_, str>>> {
     let (input, ranges) = chunk_header(input)?;
     let (input, lines) = many1(chunk_line)(input)?;
 
@@ -163,7 +163,7 @@ fn chunk(input: Input<'_>) -> IResult<Input<'_>, Hunk> {
         Hunk {
             old_range,
             new_range,
-            range_hint,
+            range_hint: range_hint.into(),
             lines,
         },
     ))
@@ -223,17 +223,19 @@ fn u64_digit(input: Input<'_>) -> IResult<Input<'_>, u64> {
 //FIXME: Use the ranges in the chunk header to figure out how many chunk lines to parse. Will need
 // to figure out how to count in nom more robustly than many1!(). Maybe using switch!()?
 //FIXME: The test_parse_triple_plus_minus_hack test will no longer panic when this is fixed.
-fn chunk_line(input: Input<'_>) -> IResult<Input<'_>, Line> {
+fn chunk_line(input: Input<'_>) -> IResult<Input<'_>, Line<Cow<'_, str>>> {
     alt((
         map(
             preceded(tuple((char('+'), not(tag("++ ")))), consume_content_line),
-            Line::Add,
+            |s| Line::Add(s.into()),
         ),
         map(
             preceded(tuple((char('-'), not(tag("-- ")))), consume_content_line),
-            Line::Remove,
+            |s| Line::Remove(s.into()),
         ),
-        map(preceded(char(' '), consume_content_line), Line::Context),
+        map(preceded(char(' '), consume_content_line), |s| {
+            Line::Context(s.into())
+        }),
     ))(input)
 }
 
@@ -413,7 +415,7 @@ mod tests {
         ));
 
         let sample2b = "\
---- lao	
+--- lao
 +++ tzu	\n";
         test_parser!(headers(sample2b) -> (
             File {path: "lao".into(), meta: None},
@@ -504,7 +506,8 @@ mod tests {
                 Line::Context("  so we may see their subtlety,"),
                 Line::Context("And let there always be being,"),
             ],
-        };
+        }
+        .into_s();
         test_parser!(chunk(sample) -> expected);
         Ok(())
     }
@@ -578,7 +581,8 @@ mod tests {
                 },
             ],
             end_newline: true,
-        };
+        }
+        .into_s();
 
         test_parser!(patch(sample) -> expected);
 

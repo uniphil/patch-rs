@@ -5,15 +5,96 @@ use chrono::{DateTime, FixedOffset};
 
 use crate::parser::{parse_multiple_patches, parse_single_patch, ParseError};
 
+pub trait FromS<T> {
+    fn from_s(that: T) -> Self;
+}
+
+impl<Z, S: FromS<Z>> FromS<Option<Z>> for Option<S> {
+    fn from_s(option: Option<Z>) -> Self {
+        option.map(FromS::from_s)
+    }
+}
+
+impl<Z, S: FromS<Z>> FromS<Vec<Z>> for Vec<S> {
+    fn from_s(vec: Vec<Z>) -> Self {
+        vec.into_iter().map(FromS::from_s).collect()
+    }
+}
+
+impl<'a> FromS<&'a str> for Cow<'a, str> {
+    fn from_s(s: &'a str) -> Self {
+        s.into()
+    }
+}
+
+impl<'a> FromS<String> for Cow<'a, str> {
+    fn from_s(s: String) -> Self {
+        s.into()
+    }
+}
+
+impl<'a> FromS<Cow<'a, str>> for String {
+    fn from_s(s: Cow<'a, str>) -> Self {
+        s.into()
+    }
+}
+
+impl<const N: usize, Z, S: FromS<Z>> FromS<[Z; N]> for [S; N] {
+    fn from_s(array: [Z; N]) -> Self {
+        array.map(FromS::from_s)
+    }
+}
+
+impl<Z, S: FromS<Z>> FromS<(Z,)> for (S,) {
+    fn from_s(tuple: (Z,)) -> Self {
+        (tuple.0.into_s(),)
+    }
+}
+
+impl<Z1, Z2, S1: FromS<Z1>, S2: FromS<Z2>> FromS<(Z1, Z2)> for (S1, S2) {
+    fn from_s(tuple: (Z1, Z2)) -> Self {
+        (tuple.0.into_s(), tuple.1.into_s())
+    }
+}
+
+impl<Z1, Z2, Z3, S1: FromS<Z1>, S2: FromS<Z2>, S3: FromS<Z3>> FromS<(Z1, Z2, Z3)> for (S1, S2, S3) {
+    fn from_s(tuple: (Z1, Z2, Z3)) -> Self {
+        (tuple.0.into_s(), tuple.1.into_s(), tuple.2.into_s())
+    }
+}
+
+impl<Z1, Z2, Z3, Z4, S1: FromS<Z1>, S2: FromS<Z2>, S3: FromS<Z3>, S4: FromS<Z4>>
+    FromS<(Z1, Z2, Z3, Z4)> for (S1, S2, S3, S4)
+{
+    fn from_s(tuple: (Z1, Z2, Z3, Z4)) -> Self {
+        (
+            tuple.0.into_s(),
+            tuple.1.into_s(),
+            tuple.2.into_s(),
+            tuple.3.into_s(),
+        )
+    }
+}
+
+pub trait IntoS<T> {
+    fn into_s(self) -> T;
+}
+
+impl<Q, T: FromS<Q>> IntoS<T> for Q {
+    fn into_s(self) -> T {
+        FromS::from_s(self)
+    }
+}
+
 /// A complete patch summarizing the differences between two files
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct Patch<'a> {
+pub struct Patch<S> {
     /// The file information of the `-` side of the diff, line prefix: `---`
-    pub old: File<'a>,
+    pub old: File<S>,
     /// The file information of the `+` side of the diff, line prefix: `+++`
-    pub new: File<'a>,
+    pub new: File<S>,
     /// hunks of differences; each hunk shows one area where the files differ
-    pub hunks: Vec<Hunk<'a>>,
+    pub hunks: Vec<Hunk<S>>,
     /// true if the last line of the file ends in a newline character
     ///
     /// This will only be false if at the end of the patch we encounter the text:
@@ -21,7 +102,25 @@ pub struct Patch<'a> {
     pub end_newline: bool,
 }
 
-impl<'a> fmt::Display for Patch<'a> {
+impl<Z, S: FromS<Z>> FromS<Patch<Z>> for Patch<S> {
+    fn from_s(
+        Patch {
+            old,
+            new,
+            hunks,
+            end_newline,
+        }: Patch<Z>,
+    ) -> Self {
+        Patch {
+            old: old.into_s(),
+            new: new.into_s(),
+            hunks: hunks.into_s(),
+            end_newline,
+        }
+    }
+}
+
+impl<S: AsRef<str>> fmt::Display for Patch<S> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // Display implementations typically hold up the invariant that there is no trailing
         // newline. This isn't enforced, but it allows them to work well with `println!`
@@ -38,7 +137,7 @@ impl<'a> fmt::Display for Patch<'a> {
     }
 }
 
-impl<'a> Patch<'a> {
+impl<'a> Patch<Cow<'a, str>> {
     #[allow(clippy::tabs_in_doc_comments)]
     /// Attempt to parse a patch from the given string.
     ///
@@ -162,7 +261,7 @@ fn maybe_escape_quote(f: &mut fmt::Formatter, s: &str) -> fmt::Result {
 
 /// The file path and any additional info of either the old file or the new file
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct File<'a> {
+pub struct File<S> {
     /// The parsed path or file name of the file
     ///
     /// Avoids allocation if at all possible. Only allocates if the file path is a quoted string
@@ -174,14 +273,23 @@ pub struct File<'a> {
     /// **Note:** While this string is typically a file path, this library makes no attempt to
     /// verify the format of that path. That means that **this field can potentially be any
     /// string**. You should verify it before doing anything that may be security-critical.
-    pub path: Cow<'a, str>,
+    pub path: S,
     /// Any additional information provided with the file path
-    pub meta: Option<FileMetadata<'a>>,
+    pub meta: Option<FileMetadata<S>>,
 }
 
-impl<'a> fmt::Display for File<'a> {
+impl<Z, S: FromS<Z>> FromS<File<Z>> for File<S> {
+    fn from_s(File { path, meta }: File<Z>) -> Self {
+        File {
+            path: path.into_s(),
+            meta: meta.into_s(),
+        }
+    }
+}
+
+impl<S: AsRef<str>> fmt::Display for File<S> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        maybe_escape_quote(f, &self.path)?;
+        maybe_escape_quote(f, self.path.as_ref())?;
         if let Some(meta) = &self.meta {
             write!(f, "\t{}", meta)?;
         }
@@ -191,41 +299,68 @@ impl<'a> fmt::Display for File<'a> {
 
 /// Additional metadata provided with the file path
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub enum FileMetadata<'a> {
+pub enum FileMetadata<S> {
     /// A complete datetime, e.g. `2002-02-21 23:30:39.942229878 -0800`
     DateTime(DateTime<FixedOffset>),
     /// Any other string provided after the file path, e.g. git hash, unrecognized timestamp, etc.
-    Other(Cow<'a, str>),
+    Other(S),
 }
 
-impl<'a> fmt::Display for FileMetadata<'a> {
+impl<Z, S: FromS<Z>> FromS<FileMetadata<Z>> for FileMetadata<S> {
+    fn from_s(metadata: FileMetadata<Z>) -> Self {
+        match metadata {
+            FileMetadata::DateTime(datetime) => FileMetadata::DateTime(datetime),
+            FileMetadata::Other(other) => FileMetadata::Other(other.into_s()),
+        }
+    }
+}
+
+impl<S: AsRef<str>> fmt::Display for FileMetadata<S> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             FileMetadata::DateTime(datetime) => {
                 write!(f, "{}", datetime.format("%F %T%.f %z"))
             }
-            FileMetadata::Other(data) => maybe_escape_quote(f, data),
+            FileMetadata::Other(data) => maybe_escape_quote(f, data.as_ref()),
         }
     }
 }
 
 /// One area where the files differ
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct Hunk<'a> {
+pub struct Hunk<S> {
     /// The range of lines in the old file that this hunk represents
     pub old_range: Range,
     /// The range of lines in the new file that this hunk represents
     pub new_range: Range,
     /// Any trailing text after the hunk's range information
-    pub range_hint: &'a str,
+    pub range_hint: S,
     /// Each line of text in the hunk, prefixed with the type of change it represents
-    pub lines: Vec<Line<'a>>,
+    pub lines: Vec<Line<S>>,
 }
 
-impl<'a> Hunk<'a> {
+impl<Z, S: FromS<Z>> FromS<Hunk<Z>> for Hunk<S> {
+    fn from_s(
+        Hunk {
+            old_range,
+            new_range,
+            range_hint,
+            lines,
+        }: Hunk<Z>,
+    ) -> Self {
+        Hunk {
+            old_range,
+            new_range,
+            range_hint: range_hint.into_s(),
+            lines: lines.into_s(),
+        }
+    }
+}
+
+impl<S: AsRef<str>> Hunk<S> {
     /// A nicer way to access the optional hint
     pub fn hint(&self) -> Option<&str> {
-        let h = self.range_hint.trim_start();
+        let h = self.range_hint.as_ref().trim_start();
         if h.is_empty() {
             None
         } else {
@@ -234,12 +369,14 @@ impl<'a> Hunk<'a> {
     }
 }
 
-impl<'a> fmt::Display for Hunk<'a> {
+impl<S: AsRef<str>> fmt::Display for Hunk<S> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
             "@@ -{} +{} @@{}",
-            self.old_range, self.new_range, self.range_hint
+            self.old_range,
+            self.new_range,
+            self.range_hint.as_ref()
         )?;
 
         for line in &self.lines {
@@ -267,21 +404,31 @@ impl fmt::Display for Range {
 
 /// A line of the old file, new file, or both
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub enum Line<'a> {
+pub enum Line<S> {
     /// A line added to the old file in the new file
-    Add(&'a str),
+    Add(S),
     /// A line removed from the old file in the new file
-    Remove(&'a str),
+    Remove(S),
     /// A line provided for context in the diff (unchanged); from both the old and the new file
-    Context(&'a str),
+    Context(S),
 }
 
-impl<'a> fmt::Display for Line<'a> {
+impl<Z, S: FromS<Z>> FromS<Line<Z>> for Line<S> {
+    fn from_s(line: Line<Z>) -> Self {
+        match line {
+            Line::Add(line) => Line::Add(line.into_s()),
+            Line::Remove(line) => Line::Remove(line.into_s()),
+            Line::Context(line) => Line::Context(line.into_s()),
+        }
+    }
+}
+
+impl<S: AsRef<str>> fmt::Display for Line<S> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Line::Add(line) => write!(f, "+{}", line),
-            Line::Remove(line) => write!(f, "-{}", line),
-            Line::Context(line) => write!(f, " {}", line),
+            Line::Add(line) => write!(f, "+{}", line.as_ref()),
+            Line::Remove(line) => write!(f, "-{}", line.as_ref()),
+            Line::Context(line) => write!(f, " {}", line.as_ref()),
         }
     }
 }

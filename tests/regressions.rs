@@ -1,4 +1,4 @@
-use patch::{File, FileMetadata, Hunk, Line, ParseError, Patch, Range};
+use patch::{File, FileMetadata, Hunk, IntoS, Line, ParseError, Patch, Range};
 
 use pretty_assertions::assert_eq;
 
@@ -11,7 +11,7 @@ fn hunk_header_context_is_not_a_line_15() -> Result<(), ParseError<'static>> {
  x
 ";
     let patch = Patch::from_single(sample)?;
-    assert_eq!(patch.hunks[0].lines, [Line::Context("x")]);
+    assert_eq!(patch.hunks[0].lines, [Line::Context("x").into_s()]);
     Ok(())
 }
 
@@ -43,6 +43,7 @@ fn crlf_breaks_stuff_17() -> Result<(), ParseError<'static>> {
             }],
             end_newline: true,
         }
+        .into_s()
     );
     Ok(())
 }
