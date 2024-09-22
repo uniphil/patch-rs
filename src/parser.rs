@@ -116,7 +116,7 @@ fn patch(input: Input<'_>) -> IResult<Input<'_>, Patch> {
 // Header lines
 fn headers(input: Input<'_>) -> IResult<Input<'_>, (File, File)> {
     // Ignore any preamble lines in produced diffs
-    let (input, _) = take_until("---")(input)?;
+    let (input, _) = take_until("--- ")(input)?;
     let (input, _) = tag("--- ")(input)?;
     let (input, oldfile) = header_line_content(input)?;
     let (input, _) = line_ending(input)?;

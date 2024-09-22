@@ -1,16 +1,18 @@
-diff --git a/added_file b/added_file
-new file mode 100644
-index 0000000..9b710f3
---- /dev/null
-+++ b/added_file
-@@ -0,0 +1,4 @@
-+This was missing!
-+Adding it now.
-+
-+Only for testing purposes.
-\ No newline at end of file
+From c285d896b6ef509291860351d246e82a83e9d96a Mon Sep 17 00:00:00 2001
+From: Foo Bar <foo.bar@example.com>
+Date: Mon, 9 Sep 2024 21:14:30 +0200
+Subject: [PATCH] Test commit
+
+---
+ modified_file | 4 +++-
+ new_file      | 4 ++++
+ removed_file  | 3 ---
+ 3 files changed, 7 insertions(+), 4 deletions(-)
+ create mode 100644 new_file
+ delete mode 100644 removed_file
+
 diff --git a/modified_file b/modified_file
-index c7921f5..8946660 100644
+index c368d8f..922fd19 100644
 --- a/modified_file
 +++ b/modified_file
 @@ -1,5 +1,7 @@
@@ -23,9 +25,20 @@ index c7921f5..8946660 100644
  
  This will stay.
 \ No newline at end of file
+diff --git a/new_file b/new_file
+new file mode 100644
+index 0000000..7056bca
+--- /dev/null
++++ b/new_file
+@@ -0,0 +1,4 @@
++This was missing!
++Adding it now.
++
++Only for testing purposes.
+\ No newline at end of file
 diff --git a/removed_file b/removed_file
 deleted file mode 100644
-index 1f38447..0000000
+index 9b89750..0000000
 --- a/removed_file
 +++ /dev/null
 @@ -1,3 +0,0 @@
