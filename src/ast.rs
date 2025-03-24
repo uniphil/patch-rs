@@ -3,7 +3,7 @@ use std::fmt;
 
 use chrono::{DateTime, FixedOffset};
 
-use crate::parser::{parse_multiple_patches, parse_single_patch, ParseError};
+use crate::parser::{ParseError, parse_multiple_patches, parse_single_patch};
 
 /// A complete patch summarizing the differences between two files
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -21,7 +21,7 @@ pub struct Patch<'a> {
     pub end_newline: bool,
 }
 
-impl<'a> fmt::Display for Patch<'a> {
+impl fmt::Display for Patch<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // Display implementations typically hold up the invariant that there is no trailing
         // newline. This isn't enforced, but it allows them to work well with `println!`
@@ -179,7 +179,7 @@ pub struct File<'a> {
     pub meta: Option<FileMetadata<'a>>,
 }
 
-impl<'a> fmt::Display for File<'a> {
+impl fmt::Display for File<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         maybe_escape_quote(f, &self.path)?;
         if let Some(meta) = &self.meta {
@@ -198,7 +198,7 @@ pub enum FileMetadata<'a> {
     Other(Cow<'a, str>),
 }
 
-impl<'a> fmt::Display for FileMetadata<'a> {
+impl fmt::Display for FileMetadata<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             FileMetadata::DateTime(datetime) => {
@@ -222,19 +222,15 @@ pub struct Hunk<'a> {
     pub lines: Vec<Line<'a>>,
 }
 
-impl<'a> Hunk<'a> {
+impl Hunk<'_> {
     /// A nicer way to access the optional hint
     pub fn hint(&self) -> Option<&str> {
         let h = self.range_hint.trim_start();
-        if h.is_empty() {
-            None
-        } else {
-            Some(h)
-        }
+        if h.is_empty() { None } else { Some(h) }
     }
 }
 
-impl<'a> fmt::Display for Hunk<'a> {
+impl fmt::Display for Hunk<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
@@ -276,7 +272,7 @@ pub enum Line<'a> {
     Context(&'a str),
 }
 
-impl<'a> fmt::Display for Line<'a> {
+impl fmt::Display for Line<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Line::Add(line) => write!(f, "+{}", line),

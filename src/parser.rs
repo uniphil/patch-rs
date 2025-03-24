@@ -9,7 +9,7 @@ use nom::{
     character::complete::{char, digit1, line_ending, none_of, not_line_ending, one_of},
     combinator::{map, not, opt},
     multi::{many0, many1},
-    sequence::{delimited, preceded, terminated, tuple},
+    sequence::{delimited, preceded, terminated},
 };
 
 use crate::ast::*;
@@ -45,7 +45,7 @@ impl<'a> From<nom::Err<nom::error::Error<Input<'a>>>> for ParseError<'a> {
     }
 }
 
-impl<'a> std::fmt::Display for ParseError<'a> {
+impl std::fmt::Display for ParseError<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
             f,
@@ -55,14 +55,15 @@ impl<'a> std::fmt::Display for ParseError<'a> {
     }
 }
 
-impl<'a> Error for ParseError<'a> {
+impl Error for ParseError<'_> {
     fn description(&self) -> &str {
         self.kind.description()
     }
 }
 
 fn consume_content_line(input: Input<'_>) -> IResult<Input<'_>, &str> {
-    let (input, raw) = terminated(not_line_ending, line_ending)(input)?;
+    let mut parser = terminated(not_line_ending, line_ending);
+    let (input, raw) = parser.parse(input)?;
     Ok((input, raw.fragment()))
 }
 
@@ -91,7 +92,8 @@ pub(crate) fn parse_multiple_patches(s: &str) -> Result<Vec<Patch>, ParseError<'
 }
 
 fn multiple_patches(input: Input<'_>) -> IResult<Input<'_>, Vec<Patch>> {
-    many1(patch)(input)
+    let mut parser = many1(patch);
+    parser.parse(input)
 }
 
 fn patch(input: Input<'_>) -> IResult<Input<'_>, Patch> {
@@ -99,7 +101,8 @@ fn patch(input: Input<'_>) -> IResult<Input<'_>, Patch> {
     let (input, hunks) = chunks(input)?;
     let (input, no_newline_indicator) = no_newline_indicator(input)?;
     // Ignore trailing empty lines produced by some diff programs
-    let (input, _) = many0(line_ending)(input)?;
+    let mut parser = many0(line_ending);
+    let (input, _) = parser.parse(input)?;
 
     let (old, new) = files;
     Ok((
@@ -128,7 +131,8 @@ fn headers(input: Input<'_>) -> IResult<Input<'_>, (File, File)> {
 
 fn header_line_content(input: Input<'_>) -> IResult<Input<'_>, File> {
     let (input, filename) = filename(input)?;
-    let (input, after) = opt(preceded(char('\t'), file_metadata))(input)?;
+    let mut parser = opt(preceded(char('\t'), file_metadata));
+    let (input, after) = parser.parse(input)?;
 
     Ok((
         input,
@@ -150,12 +154,14 @@ fn header_line_content(input: Input<'_>) -> IResult<Input<'_>, File> {
 
 // Hunks of the file differences
 fn chunks(input: Input<'_>) -> IResult<Input<'_>, Vec<Hunk>> {
-    many1(chunk)(input)
+    let mut parser = many1(chunk);
+    parser.parse(input)
 }
 
 fn chunk(input: Input<'_>) -> IResult<Input<'_>, Hunk> {
     let (input, ranges) = chunk_header(input)?;
-    let (input, lines) = many1(chunk_line)(input)?;
+    let mut parser = many1(chunk_line);
+    let (input, lines) = parser.parse(input)?;
 
     let (old_range, new_range, range_hint) = ranges;
     Ok((
@@ -184,7 +190,8 @@ fn chunk_header(input: Input<'_>) -> IResult<Input<'_>, (Range, Range, &'_ str)>
 
 fn range(input: Input<'_>) -> IResult<Input<'_>, Range> {
     let (input, start) = u64_digit(input)?;
-    let (input, count) = opt(preceded(char(','), u64_digit))(input)?;
+    let mut parser = opt(preceded(char(','), u64_digit));
+    let (input, count) = parser.parse(input)?;
     let count = count.unwrap_or(1);
     Ok((input, Range { start, count }))
 }
@@ -224,55 +231,62 @@ fn u64_digit(input: Input<'_>) -> IResult<Input<'_>, u64> {
 // to figure out how to count in nom more robustly than many1!(). Maybe using switch!()?
 //FIXME: The test_parse_triple_plus_minus_hack test will no longer panic when this is fixed.
 fn chunk_line(input: Input<'_>) -> IResult<Input<'_>, Line> {
-    alt((
+    let mut parser = alt((
         map(
-            preceded(tuple((char('+'), not(tag("++ ")))), consume_content_line),
+            preceded((char('+'), not(tag("++ "))), consume_content_line),
             Line::Add,
         ),
         map(
-            preceded(tuple((char('-'), not(tag("-- ")))), consume_content_line),
+            preceded((char('-'), not(tag("-- "))), consume_content_line),
             Line::Remove,
         ),
         map(preceded(char(' '), consume_content_line), Line::Context),
-    ))(input)
+    ));
+    parser.parse(input)
 }
 
 // Trailing newline indicator
 fn no_newline_indicator(input: Input<'_>) -> IResult<Input<'_>, bool> {
-    map(
+    let mut parser = map(
         opt(terminated(
             tag("\\ No newline at end of file"),
             opt(line_ending),
         )),
         |matched| matched.is_some(),
-    )(input)
+    );
+    parser.parse(input)
 }
 
 fn filename(input: Input<'_>) -> IResult<Input<'_>, Cow<str>> {
-    alt((quoted, bare))(input)
+    let mut parser = alt((quoted, bare));
+    parser.parse(input)
 }
 
 fn file_metadata(input: Input<'_>) -> IResult<Input<'_>, Cow<str>> {
-    alt((
+    let mut parser = alt((
         quoted,
         map(not_line_ending, |data: Input<'_>| {
             Cow::Borrowed(*data.fragment())
         }),
-    ))(input)
+    ));
+    parser.parse(input)
 }
 
 fn quoted(input: Input<'_>) -> IResult<Input<'_>, Cow<str>> {
-    delimited(char('\"'), unescaped_str, char('\"'))(input)
+    let mut parser = delimited(char('\"'), unescaped_str, char('\"'));
+    parser.parse(input)
 }
 
 fn bare(input: Input<'_>) -> IResult<Input<'_>, Cow<str>> {
-    map(is_not("\t\r\n"), |data: Input<'_>| {
+    let mut parser = map(is_not("\t\r\n"), |data: Input<'_>| {
         Cow::Borrowed(*data.fragment())
-    })(input)
+    });
+    parser.parse(input)
 }
 
 fn unescaped_str(input: Input<'_>) -> IResult<Input<'_>, Cow<str>> {
-    let (input, raw) = many1(alt((unescaped_char, escaped_char)))(input)?;
+    let mut parser = many1(alt((unescaped_char, escaped_char)));
+    let (input, raw) = parser.parse(input)?;
     Ok((input, raw.into_iter().collect::<Cow<str>>()))
 }
 
@@ -283,7 +297,7 @@ fn unescaped_char(input: Input<'_>) -> IResult<Input<'_>, char> {
 
 // Parses an escaped character and returns its unescaped equivalent
 fn escaped_char(input: Input<'_>) -> IResult<Input<'_>, char> {
-    map(preceded(char('\\'), one_of(r#"0nrt"\"#)), |ch| match ch {
+    let mut parser = map(preceded(char('\\'), one_of(r#"0nrt"\"#)), |ch| match ch {
         '0' => '\0',
         'n' => '\n',
         'r' => '\r',
@@ -291,7 +305,8 @@ fn escaped_char(input: Input<'_>) -> IResult<Input<'_>, char> {
         '"' => '"',
         '\\' => '\\',
         _ => unreachable!(),
-    })(input)
+    });
+    parser.parse(input)
 }
 
 #[cfg(test)]

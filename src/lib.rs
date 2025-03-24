@@ -45,8 +45,10 @@
 
 #![deny(unused_must_use)]
 
+mod applier;
 mod ast;
 mod parser;
 
+pub use applier::{ApplyError, apply, find_replace_apply};
 pub use ast::*;
 pub use parser::ParseError;
