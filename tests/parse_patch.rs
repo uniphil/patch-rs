@@ -368,3 +368,37 @@ Binary files old.bin and new.bin differ
     assert_eq!(patches[0].old.path, "before.py");
     assert_eq!(patches[1].old.path, "old.bin");
 }
+
+#[test]
+fn binary_diff_interspersed_with_text_diff() {
+    let sample = "\
+--- before.py
++++ after.py
+@@ -1,4 +1,4 @@
+-bacon
+-eggs
+-ham
++python
++eggy
++hamster
+ guido
+Binary files old.bin and new.bin differ
+--- before2.py
++++ after2.py
+@@ -1,4 +1,4 @@
+-bacon
+-eggs
+-ham
++python
++eggy
++hamster
+ guido
+Binary files old2.bin and new2.bin differ
+";
+    let patches = Patch::from_multiple(sample).unwrap();
+    assert_eq!(patches.len(), 4);
+    assert_eq!(patches[0].old.path, "before.py");
+    assert_eq!(patches[1].old.path, "old.bin");
+    assert_eq!(patches[2].new.path, "after2.py");
+    assert_eq!(patches[3].new.path, "new2.bin");
+}

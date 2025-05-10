@@ -450,8 +450,10 @@ mod tests {
             File {path: "tzu".into(), meta: None},
         ));
 
+        // note: the trailing tab after lao is intentional and significant here
+        // see https://github.com/uniphil/patch-rs/commit/364897dae8599cdb758c00fdc8dacd1645959070
         let sample2b = "\
---- lao
+--- lao	
 +++ tzu	\n";
         test_parser!(headers(sample2b) -> (
             File {path: "lao".into(), meta: None},
